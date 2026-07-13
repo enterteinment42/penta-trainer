@@ -1,0 +1,2280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Pentatonic Trainer</title>
+
+<!-- PWA Meta Tags -->
+<meta name="application-name" content="Pentatonic Trainer">
+<meta name="description" content="Интерактивный тренажёр пентатоники для гитары">
+<meta name="theme-color" content="#0d0d0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pentatonic">
+
+<!-- Inline SVG иконка через data URL -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230d0d0f'/><text y='68' x='50' text-anchor='middle' font-size='60' font-family='serif'>🎸</text></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230d0d0f'/><text y='68' x='50' text-anchor='middle' font-size='60' font-family='serif'>🎸</text></svg>">
+
+<!-- Inline Web App Manifest -->
+<script>
+const MANIFEST = {
+  name: "Pentatonic Trainer",
+  short_name: "Pentatonic",
+  description: "Интерактивный тренажёр пентатоники для гитары",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#0d0d0f",
+  theme_color: "#0d0d0f",
+  orientation: "portrait",
+  icons: [
+    { src: "data:image/png;base64,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", sizes: "512x512", type: "image/png", purpose: "any" },
+    { src: "data:image/png;base64,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", sizes: "512x512", type: "image/png", purpose: "maskable" }
+  ]
+};
+const blob = new Blob([JSON.stringify(MANIFEST)], {type:'application/json'});
+const manifestURL = URL.createObjectURL(blob);
+document.write('<link rel="manifest" href="' + manifestURL + '">');
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg:#0d0d0f; --panel:#1a1a22; --accent:#e8c84a;
+    --accent2:#e87a4a; --root-color:#e84a6a;
+    --text:#f0ede8; --muted:#6b6870; --nut:#c8b86a; --wood:#1c1610;
+    --cw:48px; --ch:46px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'JetBrains Mono',monospace; min-height:100vh; }
+
+  header { padding:20px 28px 14px; border-bottom:1px solid #1e1e28; display:flex; align-items:baseline; gap:14px; }
+  h1 { font-family:'Bebas Neue',sans-serif; font-size:40px; letter-spacing:4px; color:var(--accent); line-height:1; }
+  .sub { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; }
+
+  .main { padding:20px 28px; }
+  .lbl { font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+
+  .key-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:20px; }
+  .key-btn { background:var(--panel); border:1px solid #2a2830; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; padding:6px 12px; cursor:pointer; transition:all .15s; border-radius:2px; }
+  .key-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .key-btn.active { background:var(--accent); border-color:var(--accent); color:#0d0d0f; }
+
+  /* mode toggle */
+  .mode-toggle { display:flex; gap:0; margin-bottom:14px; border-radius:4px; overflow:hidden; border:1px solid #2a2830; width:fit-content; }
+  .mode-btn { background:var(--panel); border:none; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; padding:7px 18px; cursor:pointer; transition:all .15s; letter-spacing:1px; }
+  .mode-btn.active-min { background:#2a1a2e; color:#c04ae8; }
+  .mode-btn.active-maj { background:#1a2a1a; color:#4ab840; }
+  .mode-btn.active-timbre { background:#2a2410; color:var(--accent); }
+  .timbre-row { display:flex; align-items:center; gap:10px; margin:18px 0 4px; flex-wrap:wrap; }
+  .timbre-lbl { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:2px; color:var(--muted); }
+  .play-btn {
+    margin-left:auto; width:30px; height:30px; border-radius:50%;
+    border:1px solid #2a2830; background:var(--panel); color:var(--accent);
+    font-size:12px; cursor:pointer; flex-shrink:0; transition:all .15s;
+  }
+  .play-btn:hover { border-color:var(--accent); }
+  .play-btn.playing { background:var(--accent); color:#111; border-color:var(--accent); }
+  .rhythm-panel { display:none; margin:10px 0 4px; padding:10px 12px; background:#131318; border-radius:8px; border:1px solid #1e1e28; }
+  .rhythm-panel.open { display:block; }
+  .rp-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .pat-btn {
+    background:var(--panel); border:1px solid #2a2830; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:10px; padding:5px 12px;
+    border-radius:14px; cursor:pointer; transition:all .15s;
+  }
+  .pat-btn.active { border-color:var(--accent); color:var(--accent); background:#2a2410; }
+  .bpm-lbl { font-size:10px; letter-spacing:2px; color:var(--muted); }
+  .bpm-inp { flex:1; accent-color:var(--accent); min-width:90px; }
+  .bpm-val { font-size:12px; color:var(--accent); min-width:30px; text-align:right; font-weight:700; }
+  .rhythm-strip { display:flex; gap:3px; align-items:flex-end; margin:4px 0 6px; flex-wrap:wrap; }
+  .rs-step {
+    min-width:22px; height:26px; display:flex; align-items:center; justify-content:center;
+    background:var(--panel); border-radius:4px; font-size:13px; color:var(--text);
+    border:1px solid transparent;
+  }
+  .rs-step.acc { font-size:16px; font-weight:700; color:var(--accent); }
+  .rs-step.rest { color:#3a3a44; }
+  .rs-step.beat { margin-left:8px; }
+  .rs-step.on { border-color:var(--accent); background:#2a2410; }
+  .rs-legend { font-size:9px; color:var(--muted); letter-spacing:0.5px; }
+  .chord-pill.playing { outline:2px solid var(--accent); outline-offset:1px; }
+  .prog-item { position:relative; }
+  .count-in {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    font-size:72px; font-weight:800; color:var(--accent);
+    font-family:'JetBrains Mono',monospace; pointer-events:none; z-index:20;
+    text-shadow:0 0 24px rgba(232,200,74,.55); opacity:.92;
+  }
+  .count-in.pulse { animation:countPulse .42s ease-out; }
+  @keyframes countPulse {
+    0% { transform:translate(-50%,-50%) scale(1.7); opacity:0; }
+    35% { opacity:1; }
+    100% { transform:translate(-50%,-50%) scale(1); opacity:.85; }
+  }
+  .metro-btn {
+    flex-shrink:0; width:32px; height:28px; border-radius:6px; margin-left:6px;
+    border:1px solid #2a2830; background:var(--panel); cursor:pointer;
+    font-size:13px; filter:grayscale(1) opacity(.5); transition:all .15s;
+  }
+  .metro-btn.on { filter:none; border-color:var(--accent); background:#2a2410; }
+  .vol-ico { font-size:13px; margin-left:4px; filter:grayscale(.3); }
+  .vol-slider { width:90px; accent-color:var(--accent); cursor:pointer; }
+  .tap-btn {
+    flex-shrink:0; height:28px; padding:0 12px; border-radius:6px; margin-left:6px;
+    border:1px solid #2a2830; background:var(--panel); color:var(--muted); cursor:pointer;
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:1px;
+    transition:all .1s;
+  }
+  .tap-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .tap-btn.flash { background:var(--accent); color:#111; transform:scale(0.94); }
+  .ro-btn {
+    background:var(--panel); border:1px solid #2a2830; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:11px; padding:6px 14px;
+    border-radius:14px; cursor:pointer; transition:all .15s;
+  }
+  .ro-btn.on { border-color:var(--accent); color:var(--accent); background:#2a2410; }
+  .nl-row { margin:10px 0 8px; }
+  .nb.ct { box-shadow:0 0 0 2px var(--accent), 0 0 10px 2px rgba(232,200,74,.45); }
+  .nb.ct-root { box-shadow:0 0 0 2px #e84a6a, 0 0 10px 2px rgba(232,74,106,.5); }
+
+  .box-sel { display:flex; gap:5px; margin-bottom:18px; flex-wrap:wrap; }
+  .box-btn { background:var(--panel); border:1px solid #2a2830; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:11px; padding:5px 12px; cursor:pointer; transition:all .15s; border-radius:2px; }
+  .box-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+  .box-btn.on { background:var(--accent2); border-color:var(--accent2); color:#0d0d0f; font-weight:600; }
+  .box-btn.all { background:#2a2060; border-color:#7060e0; color:#c0b0ff; font-weight:600; }
+
+  .info { display:flex; gap:18px; margin-bottom:18px; padding:9px 13px; background:var(--panel); border-left:3px solid var(--accent); font-size:11px; color:var(--muted); flex-wrap:wrap; }
+  .info span { color:var(--text); }
+  .info .nl { color:var(--accent); font-weight:600; letter-spacing:2px; }
+
+  .fb-wrap { overflow-x:auto; padding-bottom:30px; }
+
+  /* fretboard container — position:relative for SVG overlay */
+  .fretboard {
+    background:var(--wood); border-radius:4px; border:1px solid #2a2418;
+    box-shadow:0 8px 40px rgba(0,0,0,.6);
+    position:relative;
+    display:inline-block;
+    padding:14px 10px 28px 10px;
+  }
+
+  /* fret number row */
+  .fh { display:flex; margin-left:44px; margin-bottom:2px; }
+  .fh-nut { width:14px; flex-shrink:0; }
+  .fh-c { width:var(--cw); flex-shrink:0; text-align:center; font-size:10px; color:var(--muted); }
+
+  /* string rows */
+  .sr { display:flex; align-items:center; height:var(--ch); position:relative; }
+
+  /* string line */
+  .sr::after {
+    content:''; position:absolute;
+    left:44px; right:0; top:50%; transform:translateY(-50%);
+    background:linear-gradient(90deg,#d4c47a 0%,#8a8070 10%,#5a5050 100%);
+    pointer-events:none; z-index:1;
+  }
+  .sr.s0::after,.sr.s1::after { height:1px; }
+  .sr.s2::after,.sr.s3::after { height:2px; }
+  .sr.s4::after,.sr.s5::after { height:3px; }
+
+  .slbl { width:44px; flex-shrink:0; text-align:right; padding-right:10px; font-size:11px; color:var(--muted); position:relative; z-index:3; }
+  .snut { width:14px; flex-shrink:0; height:var(--ch); background:var(--nut); position:relative; z-index:3; }
+
+  .sc {
+    width:var(--cw); flex-shrink:0; height:var(--ch);
+    border-right:2px solid #3a3020;
+    position:relative; z-index:2;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* fret marker dots */
+  .fmark { position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); width:6px; height:6px; border-radius:50%; background:#4a4450; z-index:5; }
+  .fmark.gold { background:var(--accent); }
+
+  /* note buttons */
+  .nb {
+    width:36px; height:36px; border-radius:50%; border:none;
+    font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700;
+    cursor:pointer; position:relative; z-index:10;
+    transition:transform .08s; user-select:none; -webkit-user-select:none;
+    touch-action:none;
+  }
+  .nb.reg  { background:var(--accent2); color:#0d0d0f; box-shadow:0 2px 8px rgba(232,122,74,.5); }
+  .nb.root { background:var(--root-color); color:#fff; box-shadow:0 2px 10px rgba(232,74,106,.6); }
+  .nb:active { transform:scale(.92); }
+  .nb.held { transform:scale(1.12); box-shadow:0 0 0 4px rgba(232,200,74,.7) !important; }
+
+  /* SVG overlay — fills entire fretboard */
+  .box-svg { position:absolute; top:0; left:0; pointer-events:none; z-index:30; overflow:visible; }
+
+  .legend { display:flex; gap:16px; margin-top:14px; flex-wrap:wrap; align-items:center; }
+  .li { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .ld { width:15px; height:15px; border-radius:50%; }
+  .ld.root { background:var(--root-color); } .ld.reg { background:var(--accent2); }
+  /* ── Гаммы / лады ── */
+  .nb.ext  { background:#4a4258; color:#cfc8e0; box-shadow:0 2px 6px rgba(74,66,88,.5); }
+  .nb.char { background:#ff9f2e; color:#241503; box-shadow:0 0 8px rgba(255,159,46,.55); }
+  .ld.ext  { background:#4a4258; } .ld.char { background:#ff9f2e; }
+  .scale-sel { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .scale-btn { background:var(--panel); border:1px solid #2a2830; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:1px; text-transform:uppercase;
+    padding:7px 10px; cursor:pointer; transition:all .15s; border-radius:2px; }
+  .scale-btn:hover { border-color:#8a63d2; color:#a58ae0; }
+  .scale-btn.active { background:#8a63d2; border-color:#8a63d2; color:#fff; }
+  .scale-info { display:none; }
+  .scale-info.show { display:block; background:var(--panel); border-left:3px solid #8a63d2;
+    padding:10px 13px; margin-bottom:14px; font-size:11px; line-height:1.55; }
+  .si-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:4px; flex-wrap:wrap; }
+  .si-head b { color:#a58ae0; font-size:13px; }
+  .si-genre { font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); }
+  .si-notes { margin-bottom:5px; color:var(--text); letter-spacing:1px; font-family:'JetBrains Mono',monospace; font-size:12px; }
+  .si-ext  { color:#a58ae0; font-weight:600; }
+  .si-char { color:#ff9f2e; font-weight:700; }
+  .si-tip  { color:var(--muted); }
+
+  .box-legend { display:none; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .box-legend.show { display:flex; }
+  .bl-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); }
+  .bl-sq { width:20px; height:3px; border-radius:2px; }
+
+  .hint { margin-top:14px; font-size:11px; color:var(--muted); padding:8px 12px; border:1px dashed #2a2830; border-radius:2px; line-height:1.9; }
+  .hint b { color:var(--accent); font-weight:400; }
+
+  /* Install banner */
+  #installBanner {
+    display:none; position:fixed; bottom:0; left:0; right:0; z-index:999;
+    background:#1a1a2e; border-top:2px solid var(--accent);
+    padding:14px 20px; align-items:center; gap:12px;
+    box-shadow:0 -4px 20px rgba(0,0,0,.5);
+  }
+  #installBanner .ib-text { flex:1; font-size:12px; color:var(--text); }
+  #installBanner .ib-text b { color:var(--accent); display:block; font-size:14px; margin-bottom:2px; }
+  #installBtn {
+    background:var(--accent); color:#0d0d0f; border:none; font-family:'JetBrains Mono',monospace;
+    font-size:12px; font-weight:700; padding:8px 16px; border-radius:3px; cursor:pointer;
+    white-space:nowrap;
+  }
+  #dismissBtn {
+    background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:0 4px;
+  }
+
+  /* ── CHORD PROGRESSIONS ── */
+  .prog-section { margin-top:28px; border-top:1px solid #1e1e28; padding-top:20px; }
+  .prog-section .lbl { margin-bottom:14px; }
+
+  .prog-list { display:flex; flex-direction:column; gap:10px; }
+
+  .prog-item {
+    background:var(--panel); border:1px solid #2a2830; border-radius:4px;
+    padding:12px 14px; cursor:pointer; transition:border-color .15s;
+  }
+  .prog-item:hover { border-color:#4a4460; }
+  .prog-item.playing { border-color:var(--accent); }
+
+  .prog-name { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+
+  .prog-chords { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+
+  .chord-pill {
+    padding:5px 12px; border-radius:20px; font-size:13px; font-weight:600;
+    background:#2a2838; color:var(--text); border:2px solid transparent;
+    transition:all .1s; min-width:44px; text-align:center;
+    cursor:pointer; user-select:none;
+  }
+  .chord-pill.minor { color:#a090ff; }
+  .chord-pill.major { color:#e8c84a; }
+  .chord-pill.dom   { color:#e87a4a; }
+  .chord-pill.active { border-color:var(--accent); background:#3a3848; transform:scale(1.08); }
+
+  .prog-arrow { color:var(--muted); font-size:14px; }
+
+  .prog-hint { margin-top:6px; font-size:10px; color:var(--muted); letter-spacing:.5px; }
+
+  /* Genre filter */
+  .genre-filter { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+  .genre-btn {
+    background:var(--panel); border:1px solid #2a2830; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:1px;
+    text-transform:uppercase; padding:5px 12px; cursor:pointer;
+    transition:all .15s; border-radius:20px;
+  }
+  .genre-btn:hover { border-color:#4a4460; color:var(--text); }
+  .genre-btn.active { color:#0d0d0f; font-weight:600; border-color:transparent; }
+  .genre-btn[data-genre="all"].active    { background:#6a6880; }
+  .genre-btn[data-genre="blues"].active  { background:#e84a6a; }
+  .genre-btn[data-genre="rock"].active   { background:#e87a4a; }
+  .genre-btn[data-genre="pop"].active    { background:#4a90e8; }
+  .genre-btn[data-genre="funk"].active   { background:#4ab840; }
+  .genre-btn[data-genre="reggae"].active { background:#c04ae8; }
+
+  /* ── TABS ── */
+  .tabs {
+    display:flex; border-bottom:1px solid #1e1e28;
+    padding:0 28px; background:var(--bg); position:sticky; top:0; z-index:50;
+  }
+  .tab-btn {
+    background:none; border:none; border-bottom:2px solid transparent;
+    color:var(--muted); font-family:'JetBrains Mono',monospace;
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    padding:14px 16px; cursor:pointer; transition:all .15s; margin-bottom:-1px;
+  }
+  .tab-btn:hover { color:var(--text); }
+  .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  .tab-page { display:none; }
+  .tab-page.active { display:block; }
+
+  /* ── CHORD EXPLORER ── */
+  .chord-root-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:16px; }
+  .cr-btn {
+    background:var(--panel); border:1px solid #2a2830; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;
+    padding:6px 11px; cursor:pointer; transition:all .15s; border-radius:2px;
+  }
+  .cr-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .cr-btn.active { background:var(--accent); border-color:var(--accent); color:#0d0d0f; }
+
+  .chord-type-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:20px; }
+  .ct-btn {
+    background:var(--panel); border:1px solid #2a2830; color:var(--muted);
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    padding:5px 12px; cursor:pointer; transition:all .15s; border-radius:2px;
+  }
+  .ct-btn:hover { border-color:#7060e0; color:#c0b0ff; }
+  .ct-btn.active { background:#2a2060; border-color:#7060e0; color:#c0b0ff; font-weight:600; }
+
+  .chord-cards { display:flex; flex-direction:column; gap:12px; }
+
+  .chord-card {
+    background:var(--panel); border:1px solid #2a2830; border-radius:4px;
+    padding:14px; display:flex; gap:16px; align-items:flex-start;
+  }
+
+  .chord-card-info { flex:1; }
+  .chord-card-name { font-size:18px; font-weight:700; color:var(--accent); margin-bottom:4px; }
+  .chord-card-full { font-size:10px; color:var(--muted); letter-spacing:1px; margin-bottom:8px; }
+  .chord-card-notes { font-size:11px; color:var(--text); margin-bottom:10px; }
+  .chord-card-notes b { color:var(--accent2); }
+
+  .chord-play-btn {
+    background:var(--accent2); border:none; border-radius:50%;
+    width:40px; height:40px; cursor:pointer; font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .1s; flex-shrink:0;
+  }
+  .chord-play-btn:active { transform:scale(.9); }
+
+  /* Mini fretboard for chord */
+  .mini-fb {
+    display:grid;
+    border:1px solid #2a2418; border-radius:3px; overflow:hidden;
+    background:var(--wood); margin-top:10px;
+  }
+  .mini-fb-row { display:flex; height:28px; position:relative; }
+  .mini-fb-row::after {
+    content:''; position:absolute; left:0; right:0; top:50%; transform:translateY(-50%);
+    background:#6a6060; pointer-events:none; z-index:1;
+  }
+  .mini-fb-row.ms0::after,.mini-fb-row.ms1::after { height:1px; }
+  .mini-fb-row.ms2::after,.mini-fb-row.ms3::after { height:1.5px; }
+  .mini-fb-row.ms4::after,.mini-fb-row.ms5::after { height:2px; }
+
+  .mini-lbl { width:18px; flex-shrink:0; font-size:8px; color:var(--muted); display:flex; align-items:center; justify-content:flex-end; padding-right:3px; z-index:3; }
+  .mini-nut  { width:6px; flex-shrink:0; background:var(--nut); z-index:3; }
+  .mini-cell { width:28px; flex-shrink:0; height:28px; border-right:1px solid #3a3020; position:relative; z-index:2; display:flex; align-items:center; justify-content:center; }
+  .mini-dot {
+    width:18px; height:18px; border-radius:50%; font-size:8px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; position:relative; z-index:5;
+  }
+  .mini-dot.root { background:var(--root-color); color:#fff; }
+  .mini-dot.reg  { background:var(--accent2); color:#0d0d0f; }
+  .mini-open { width:12px; flex-shrink:0; text-align:center; font-size:10px; color:var(--accent2); z-index:3; }
+  .mini-mute { width:12px; flex-shrink:0; text-align:center; font-size:10px; color:var(--muted); z-index:3; }
+  .mini-fret-lbl { display:flex; margin-left:30px; }
+  .mini-fnum { width:28px; text-align:center; font-size:8px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>PENTATONIC</h1>
+  <div class="sub">Guitar Trainer // Minor</div>
+</header>
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('penta')">🎸 Пентатоника</button>
+  <button class="tab-btn" onclick="switchTab('chords')">🎵 Аккорды</button>
+</div>
+<!-- TAB: PENTATONIC -->
+<div class="tab-page active" id="tab-penta">
+<div class="main">
+  <div class="lbl">1. Выбери тональность</div>
+  <div class="mode-toggle">
+    <button class="mode-btn" id="btnMin" onclick="setMode('minor')">MINOR</button>
+    <button class="mode-btn" id="btnMaj" onclick="setMode('major')">MAJOR</button>
+  </div>
+  <div class="key-grid" id="keyGrid"></div>
+
+  <div class="lbl">2. Выбери бокс</div>
+  <div class="box-sel" id="boxSel"></div>
+
+  <div class="info">
+    <div>Тональность: <span id="iKey">—</span></div>
+    <div>Ноты: <span class="nl" id="iNotes">—</span></div>
+    <div>Бокс: <span id="iBox">—</span></div>
+  </div>
+
+  <div class="lbl">3. Расширь до гаммы / лада</div>
+  <div class="scale-sel" id="scaleSel"></div>
+  <div class="scale-info" id="scaleInfo"></div>
+
+  <div class="nl-row">
+    <div class="mode-toggle">
+      <button class="mode-btn active-timbre" id="btnNlNotes" onclick="setNoteLabels('notes')">НОТЫ</button>
+      <button class="mode-btn"               id="btnNlInt"   onclick="setNoteLabels('intervals')">ИНТЕРВАЛЫ</button>
+    </div>
+  </div>
+  <div class="fb-wrap">
+    <div class="fretboard" id="fb"></div>
+  </div>
+
+  <div class="legend">
+    <div class="li"><div class="ld root"></div> Тоника</div>
+    <div class="li"><div class="ld reg"></div> Нота пентатоники</div>
+    <div class="li" id="legExt" style="display:none"><div class="ld ext"></div> Нота гаммы</div>
+    <div class="li" id="legChar" style="display:none"><div class="ld char"></div> Характерная нота лада</div>
+  </div>
+  <div class="box-legend" id="boxLeg"></div>
+  <div class="hint">💡 <b>Зажимай</b> ноты — звучат пока держишь. Два пальца = интервал.</div>
+
+  <div class="timbre-row">
+    <span class="timbre-lbl">ЗВУК</span>
+    <div class="mode-toggle">
+      <button class="mode-btn active-timbre" id="btnTimbreAc"   onclick="setTimbre('acoustic')">АКУСТИКА</button>
+      <button class="mode-btn"               id="btnTimbreDist" onclick="setTimbre('distortion')">ДИСТОРШН</button>
+    </div>
+    <span class="vol-ico">🔊</span>
+    <input type="range" id="volSlider" class="vol-slider" min="0" max="1.5" step="0.05" value="1"
+           oninput="setMasterVolume(parseFloat(this.value))">
+  </div>
+
+  <!-- CHORD PROGRESSIONS -->
+  <div class="prog-section">
+    <div class="lbl">4. Аккордовые прогрессии для джема</div>
+    <div class="genre-filter" id="genreFilter"></div>
+    <div class="prog-list" id="progList"></div>
+    <div class="prog-hint" id="progHint"></div>
+  </div>
+</div><!-- end .main -->
+</div><!-- end #tab-penta -->
+
+<!-- TAB: CHORDS -->
+<div class="tab-page" id="tab-chords">
+<div class="main">
+  <div class="lbl">Выбери ноту</div>
+  <div class="chord-root-grid" id="chordRootGrid"></div>
+
+  <div class="lbl">Тип аккорда</div>
+  <div class="chord-type-grid" id="chordTypeGrid"></div>
+
+  <div class="chord-cards" id="chordCards"></div>
+</div>
+</div>
+
+
+<script>
+// ═══ CONSTANTS ════════════════════════════════════
+const CHROMATIC  = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const OPEN_MIDI  = [40,45,50,55,59,64]; // midiIdx 0=lowE..5=highE
+const MAX_FRET   = 17;
+const SHOW_FRETS = Array.from({length: MAX_FRET+1}, (_,i) => i); // [0..17]
+const MARKERS    = new Set([3,5,7,9,12,15]);
+
+// Display rows: 0=high e, 5=low E
+const STR_NAMES = ['e','B','G','D','A','E'];
+const STR_MIDIS = [5,4,3,2,1,0]; // STR_MIDIS[displayRow] = midiIdx
+
+// Am boxes (minor pentatonic) — midiIdx key, [fret1, fret2]
+// Anchor: A on low E = fret 5
+// Verified: lowE=E A=A D=D G=G B=B highE=E
+const AM_BOXES = [
+  // Box 1: frets 5-8
+  {0:[5,8],  1:[5,7],  2:[5,7],  3:[5,7],  4:[5,8],  5:[5,8]  },
+  // Box 2: frets 7-10
+  {0:[8,10], 1:[7,10], 2:[7,10], 3:[7,9],  4:[8,10], 5:[8,10] },
+  // Box 3: frets 10-12
+  {0:[10,12],1:[10,12],2:[10,12],3:[9,12], 4:[10,13],5:[10,12]},
+  // Box 4: frets 12-15
+  {0:[12,15],1:[12,15],2:[12,14],3:[12,14],4:[13,15],5:[12,15]},
+  // Box 5: frets 15-17
+  {0:[15,17],1:[15,17],2:[14,17],3:[14,17],4:[15,17],5:[15,17]},
+];
+
+// A major pentatonic boxes — notes: A B C# E F#
+// Verified correct for all 12 transpositions (keys: midiIdx 0=lowE..5=highE)
+const AMAJ_BOXES = [
+  {0:[5,7],  1:[4,7],  2:[4,7],  3:[4,6],  4:[5,7],  5:[5,7]  }, // Box 1
+  {0:[7,9],  1:[7,9],  2:[7,9],  3:[6,9],  4:[7,10], 5:[7,9]  }, // Box 2
+  {0:[9,12], 1:[9,12], 2:[9,11], 3:[9,11], 4:[10,12],5:[9,12] }, // Box 3
+  {0:[12,14],1:[12,14],2:[11,14],3:[11,14],4:[12,14],5:[12,14]}, // Box 4
+  {0:[14,17],1:[14,16],2:[14,16],3:[14,16],4:[14,17],5:[14,17]}, // Box 5
+];
+
+const BOX_COLORS = ['#e84a6a','#e8a030','#4ab840','#4a90e8','#c04ae8'];
+
+function semitones(key) { return CHROMATIC.indexOf(key) - CHROMATIC.indexOf('A'); }
+
+function currentBoxes() { return selMode === 'minor' ? AM_BOXES : AMAJ_BOXES; }
+
+function pentaIntervals() { return selMode === 'minor' ? [0,3,5,7,10] : [0,2,4,7,9]; }
+
+// ═══ SCALES / MODES ═══════════════════════════════
+// 7 ладов мажорной гаммы. base — какая пентатоника внутри лада.
+// char — интервал характерной ноты (то, что отличает лад и даёт его «настроение»).
+const SCALES = {
+  aeolian:    { name:'Натур. минор', full:'эолийский', base:'minor', intervals:[0,2,3,5,7,8,10], char:8, charLabel:'b6',
+    tip:'Пентатоника + 2 и b6. База большинства минорных песен и рок-баллад. Обыгрывай ход b6→5 — драматичная краска.',
+    genre:'Рок · баллады · поп' },
+  dorian:     { name:'Дорийский', base:'minor', intervals:[0,2,3,5,7,9,10], char:9, charLabel:'6',
+    tip:'Минор с мажорной 6-й — светлее и «гибче» натурального минора. Держи 6-ю над минорным аккордом — фирменный звук Santana и фанка.',
+    genre:'Фанк · джаз-рок · соул' },
+  phrygian:   { name:'Фригийский', base:'minor', intervals:[0,1,3,5,7,8,10], char:1, charLabel:'b2',
+    tip:'b2 прямо над тоникой — испанский/восточный оттенок. Обыгрывай полутон b2→1 в конце фраз.',
+    genre:'Фламенко · метал' },
+  locrian:    { name:'Локрийский', base:'minor', intervals:[0,1,3,5,6,8,10], char:6, charLabel:'b5',
+    tip:'Единственный лад без чистой квинты — неустойчивый, тёмный. Пентатоника сюда целиком не ложится (её 5-я выпадает с грифа). На практике — только над m7b5.',
+    genre:'Метал · джаз (m7b5)' },
+  ionian:     { name:'Мажор', full:'ионийский', base:'major', intervals:[0,2,4,5,7,9,11], char:11, charLabel:'7',
+    tip:'Пентатоника + 4 и 7. Вводный тон (7) тянется в тонику — ставь его перед тоникой в конце фразы.',
+    genre:'Поп · кантри' },
+  mixolydian: { name:'Миксолидийский', base:'major', intervals:[0,2,4,5,7,9,10], char:10, charLabel:'b7',
+    tip:'Мажор с b7 — доминантовый звук. Идеален над 7-аккордами: блюз-рок живёт здесь.',
+    genre:'Блюз-рок · кантри-рок' },
+  lydian:     { name:'Лидийский', base:'major', intervals:[0,2,4,6,7,9,11], char:6, charLabel:'#4',
+    tip:'#4 — воздушный, «парящий» звук. Задержись на #4 над мажорным аккордом — это и есть лидийская краска.',
+    genre:'Фьюжн · саундтреки' },
+};
+const SCALE_ORDER_MINOR = ['aeolian','dorian','phrygian','locrian'];
+const SCALE_ORDER_MAJOR = ['ionian','mixolydian','lydian'];
+
+function getActiveFrets(key, box) {
+  const sh    = semitones(key);
+  const boxes = currentBoxes();
+  const out   = new Set();
+  const idxs  = box === 'all' ? [0,1,2,3,4] : [box-1];
+
+  idxs.forEach(bi => {
+    const allFrets = Object.values(boxes[bi]).flat().map(f => f + sh);
+    const minFret  = Math.min(...allFrets);
+    const maxFret  = Math.max(...allFrets);
+
+    if (box === 'all') {
+      // В режиме ALL показываем все октавы которые помещаются на гриф
+      [-12, 0, 12].forEach(oct => {
+        const mn = minFret + oct;
+        const mx = maxFret + oct;
+        // Показываем октаву если хотя бы часть попадает на гриф
+        if (mx < 0 || mn > MAX_FRET) return;
+        Object.entries(boxes[bi]).forEach(([mi, frets]) => {
+          frets.forEach(f => {
+            const nf = f + sh + oct;
+            if (nf >= 0 && nf <= MAX_FRET) out.add(`${mi}-${nf}`);
+          });
+        });
+      });
+    } else {
+      // В режиме одного бокса — сдвигаем целиком в нужную октаву
+      let octave = 0;
+      if (minFret < 0)             octave = 12;
+      else if (maxFret > MAX_FRET) octave = -12;
+      Object.entries(boxes[bi]).forEach(([mi, frets]) => {
+        frets.forEach(f => {
+          const nf = f + sh + octave;
+          if (nf >= 0 && nf <= MAX_FRET) out.add(`${mi}-${nf}`);
+        });
+      });
+    }
+  });
+  return out;
+}
+
+// ═══ AUDIO ════════════════════════════════════════
+let actx = null;
+function getCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+
+// Master-цепь: компрессор-лимитер + регулятор громкости
+let master = null, masterOutNode = null;
+let masterVol = 1.0; // 0..1.5, регулируется слайдером
+function getMaster() {
+  const ctx = getCtx();
+  if (!master) {
+    // мягкий компрессор с быстрым релизом — ловит пики полифонии, но НЕ накапливает зажатие
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -8; comp.knee.value = 12;
+    comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.08;
+    const g = ctx.createGain(); g.gain.value = 0.7;
+    masterOutNode = ctx.createGain(); masterOutNode.gain.value = masterVol; // громкость ПОСЛЕ компрессора
+    g.connect(comp); comp.connect(masterOutNode); masterOutNode.connect(ctx.destination);
+    master = g;
+  }
+  return master;
+}
+function setMasterVolume(v) {
+  masterVol = v;
+  if (masterOutNode) masterOutNode.gain.value = v;
+  try { saveState(); } catch(e) {}
+}
+
+// ── Тембр: 'acoustic' (щипок струны, Karplus-Strong) | 'distortion' (электрогитара) ──
+let timbre = 'acoustic';
+function setTimbre(t) {
+  timbre = t;
+  try { saveState(); } catch(e) {} // saveState может быть ещё не объявлен при первом вызове
+  const a = document.getElementById('btnTimbreAc');
+  const d = document.getElementById('btnTimbreDist');
+  if (a) a.className = 'mode-btn' + (t === 'acoustic'   ? ' active-timbre' : '');
+  if (d) d.className = 'mode-btn' + (t === 'distortion' ? ' active-timbre' : '');
+}
+
+// Кривая овердрайва: плавная tanh-сатурация (musical, без цифрового хард-клипа)
+let DIST_CURVE = null;
+function distCurve() {
+  if (DIST_CURVE) return DIST_CURVE;
+  const n = 2048, c = new Float32Array(n), k = 8;
+  const norm = Math.tanh(k);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    c[i] = Math.tanh(k * x) / norm;
+  }
+  DIST_CURVE = c; return c;
+}
+
+// ── ОБЩИЙ канал перегруза (один на всё приложение) ──
+// Все дисторшн-голоса суммируются и перегружаются ВМЕСТЕ, как струны в усилителе:
+// 1 WaveShaper вместо одного на ноту → нет перегрузки аудиопотока (треска и лагов),
+// плюс настоящая интермодуляция струн — характер дисторшн-аккордов.
+let distBus = null;
+function getDistBus() {
+  const ctx = getCtx();
+  if (!distBus) {
+    const inp    = ctx.createGain();   inp.gain.value = 1;
+    // Перед перегрузом убираем физзовые верха пилы (но не так агрессивно, как для KS)
+    const preLp  = ctx.createBiquadFilter(); preLp.type = 'lowpass'; preLp.frequency.value = 2800; preLp.Q.value = 0.5;
+    const hp     = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 80;   // ниже срез = больше тела
+    const shaper = ctx.createWaveShaper();   shaper.curve = distCurve(); shaper.oversample = '2x';
+    // гитарный кабинет: спад верха + резонанс на срезе, акцент в нижней середине («жир»)
+    const cab    = ctx.createBiquadFilter(); cab.type = 'lowpass'; cab.frequency.value = 2700; cab.Q.value = 1.1;
+    const mid    = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 600; mid.Q.value = 0.6; mid.gain.value = 4.5;
+    const post   = ctx.createGain();   post.gain.value = 0.2;  // уровень после клиппинга
+    inp.connect(preLp); preLp.connect(hp); hp.connect(shaper); shaper.connect(cab); cab.connect(mid); mid.connect(post);
+    post.connect(getMaster());
+    distBus = inp;
+  }
+  return distBus;
+}
+
+const activeStops = new Set();
+function stopAllNotes() {
+  // Гасим все звучащие ноты — защита от «зависшего» гула при ре-рендере/смене вкладки
+  if (typeof stopPlayer === 'function' && player.running) stopPlayer();
+  Array.from(activeStops).forEach(stop => stop());
+  document.querySelectorAll('.nb.held').forEach(el => el.classList.remove('held'));
+  document.querySelectorAll('.chord-pill.active').forEach(el => el.classList.remove('active'));
+}
+
+// Karplus-Strong: генерируем затухающий щипок струны в буфер
+function ksBuffer(ctx, freq, dur, damping) {
+  const sr  = ctx.sampleRate;
+  const N   = Math.max(2, Math.round(sr / freq));
+  const len = Math.floor(sr * dur);
+  const buf = ctx.createBuffer(1, len, sr);
+  const out = buf.getChannelData(0);
+  const ring = new Float32Array(N);
+  for (let i = 0; i < N; i++) ring[i] = Math.random() * 2 - 1;
+  let ptr = 0;
+  for (let i = 0; i < len; i++) {
+    const s  = ring[ptr];
+    const nx = ring[(ptr + 1) % N];
+    out[i] = s;
+    ring[ptr] = (s + nx) * 0.5 * damping;  // lowpass + затухание струны
+    ptr = (ptr + 1) % N;
+  }
+  return buf;
+}
+
+// Один голос нужного тембра.
+// sustain=true → держится (гриф). opts: { when — старт по аудио-часам, dur — длительность, vel — громкость 0..1 }
+function makeVoice(midi, sustain, opts = {}) {
+  const ctx  = getCtx();
+  const dest = getMaster();
+  const when = opts.when !== undefined ? opts.when : ctx.currentTime;
+  const vel  = opts.vel  !== undefined ? opts.vel  : 1;
+  const freq = 440 * Math.pow(2, (midi - 69) / 12);
+
+  if (timbre === 'acoustic') {
+    const dur  = opts.dur !== undefined ? opts.dur : (sustain ? 3.2 : 2.0);
+    const src  = ctx.createBufferSource();
+    src.buffer = ksBuffer(ctx, freq, Math.max(0.3, dur), 0.996);
+    const lp   = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 4500;
+    const g = ctx.createGain(); g.gain.value = 0.55 * vel;
+    src.connect(lp); lp.connect(g); g.connect(dest);
+    src.start(when);
+    const stop = () => {
+      if (!activeStops.has(stop)) return;
+      activeStops.delete(stop);
+      const t = ctx.currentTime;
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      try { src.stop(t + 0.25); } catch(e) {}
+    };
+    activeStops.add(stop);
+    return stop;
+
+  } else {
+    // Дисторшн: пилообразный осциллятор (спектр постоянно богат → «жужжащий» сустейн гитары,
+    // не тускнеет как фортепиано) + щелчок медиатора + гитарная огибающая. Через общий перегруз-канал.
+    const bus = getDistBus();
+    const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = freq;
+    const sub = ctx.createOscillator(); sub.type = 'sawtooth'; sub.frequency.value = freq / 2; // октава вниз = «жир»/тело
+    const subG = ctx.createGain(); subG.gain.value = 0.5;
+    const env = ctx.createGain();
+    const peak       = 0.95 * vel;
+    const sustainLvl = 0.60 * vel;
+    const decayT = opts.dur !== undefined ? Math.max(0.18, opts.dur) : (sustain ? 4.5 : 2.3);
+    env.gain.setValueAtTime(0.0001, when);
+    env.gain.linearRampToValueAtTime(peak, when + 0.004);            // быстрая атака
+    env.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainLvl), when + 0.10); // спад на сустейн
+    env.gain.exponentialRampToValueAtTime(0.0001, when + decayT);    // долгое затухание
+    osc.connect(env); sub.connect(subG); subG.connect(env); env.connect(bus);
+    osc.start(when); sub.start(when);
+
+    // щелчок медиатора — короткий шумовой транзиент мимо перегруза (чтобы остался чётким)
+    const pickLen = Math.floor(ctx.sampleRate * 0.010);
+    const pbuf = ctx.createBuffer(1, pickLen, ctx.sampleRate);
+    const pd = pbuf.getChannelData(0);
+    for (let i = 0; i < pickLen; i++) pd[i] = (Math.random()*2-1) * (1 - i/pickLen);
+    const pick = ctx.createBufferSource(); pick.buffer = pbuf;
+    const pickBp = ctx.createBiquadFilter(); pickBp.type = 'bandpass'; pickBp.frequency.value = 2400; pickBp.Q.value = 0.7;
+    const pickG = ctx.createGain(); pickG.gain.value = 0.22 * vel;
+    pick.connect(pickBp); pickBp.connect(pickG); pickG.connect(dest);
+    pick.start(when);
+
+    let stopAt = null;
+    if (!sustain) {
+      stopAt = when + decayT + 0.1;
+      try { osc.stop(stopAt); sub.stop(stopAt); } catch(e) {}
+    }
+    const stop = () => {
+      if (!activeStops.has(stop)) return;
+      activeStops.delete(stop);
+      const t = ctx.currentTime;
+      env.gain.cancelScheduledValues(t);
+      env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), t);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      const st = stopAt !== null ? Math.min(stopAt, t + 0.18) : t + 0.18;
+      try { osc.stop(st); sub.stop(st); } catch(e) {}
+    };
+    activeStops.add(stop);
+    return stop;
+  }
+}
+
+// Перкуссионный «чик» — глушёный удар по струнам (для фанка/регги)
+function chick(when, vel = 1) {
+  const ctx = getCtx();
+  const dest = getMaster();
+  const len = Math.floor(ctx.sampleRate * 0.06);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * (1 - i/len);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.8;
+  const g = ctx.createGain(); g.gain.value = 0.30 * vel;
+  src.connect(bp); bp.connect(g); g.connect(dest);
+  src.start(when);
+  const stop = () => {
+    if (!activeStops.has(stop)) return;
+    activeStops.delete(stop);
+    try { src.stop(ctx.currentTime); } catch(e) {}
+  };
+  activeStops.add(stop);
+  setTimeout(() => { activeStops.delete(stop); }, Math.max(0, (when - ctx.currentTime) * 1000) + 200);
+  return stop;
+}
+
+// Клик метронома: короткий тон (акцент на 1-ю долю — выше и громче)
+function metroClick(when, accent) {
+  const ctx = getCtx();
+  const dest = getMaster();
+  const osc = ctx.createOscillator();
+  const g   = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = accent ? 2000 : 1300;
+  const vol = accent ? 0.5 : 0.32;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+  osc.connect(g); g.connect(dest);
+  osc.start(when); osc.stop(when + 0.06);
+}
+
+// Одиночная нота на грифе (press-and-hold)
+function startNote(midi) {
+  return makeVoice(midi, true);
+}
+
+// ═══ STATE ════════════════════════════════════════
+let selKey  = 'A';
+let selBox  = 1;
+let selMode = 'minor'; // 'minor' | 'major'
+let selScale = null;   // null (чистая пентатоника) | ключ из SCALES
+let noteLabels = 'notes'; // 'notes' | 'intervals'
+let jamPrefs = {};        // "<жанр>|<название>" → { pat, bpm } — настройки джема по прогрессиям
+let activeTab = 'penta';  // 'penta' | 'chords'
+let cellMap = {};
+
+// ── Сохранение состояния между сессиями ──
+const LS_KEY = 'penta-trainer-state';
+function saveState() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
+    }));
+  } catch(e) {}
+}
+function loadState() {
+  try {
+    const st = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    if (CHROMATIC.includes(st.selKey)) selKey = st.selKey;
+    if (st.selBox === 'all' || (st.selBox >= 1 && st.selBox <= 5)) selBox = st.selBox;
+    if (['minor','major'].includes(st.selMode)) selMode = st.selMode;
+    if (typeof st.selScale === 'string' && SCALES[st.selScale] && SCALES[st.selScale].base === selMode) selScale = st.selScale;
+    if (typeof st.selGenre === 'string') selGenre = st.selGenre;
+    if (['acoustic','distortion'].includes(st.timbre)) { timbre = st.timbre; setTimbre(st.timbre); }
+    if (['notes','intervals'].includes(st.noteLabels)) noteLabels = st.noteLabels;
+    if (st.jamPrefs && typeof st.jamPrefs === 'object') jamPrefs = st.jamPrefs;
+    if (['penta','chords'].includes(st.activeTab)) activeTab = st.activeTab;
+    if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
+    if (typeof st.masterVol === 'number' && st.masterVol >= 0 && st.masterVol <= 1.5) masterVol = st.masterVol;
+  } catch(e) {}
+}
+
+function setMode(m) {
+  selMode = m;
+  if (selScale && SCALES[selScale].base !== m) selScale = null;
+  render();
+}
+
+const INTERVAL_SHORT = {0:'1',1:'b2',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6',9:'6',10:'b7',11:'7'};
+function setNoteLabels(v) {
+  noteLabels = v;
+  syncNoteLabelButtons();
+  render();
+}
+function syncNoteLabelButtons() {
+  const n = document.getElementById('btnNlNotes');
+  const i = document.getElementById('btnNlInt');
+  if (n) n.className = 'mode-btn' + (noteLabels === 'notes'     ? ' active-timbre' : '');
+  if (i) i.className = 'mode-btn' + (noteLabels === 'intervals' ? ' active-timbre' : '');
+}
+
+// ═══ RENDER ═══════════════════════════════════════
+function renderKeyGrid() {
+  // mode buttons
+  document.getElementById('btnMin').className = 'mode-btn' + (selMode==='minor' ? ' active-min' : '');
+  document.getElementById('btnMaj').className = 'mode-btn' + (selMode==='major' ? ' active-maj' : '');
+
+  const el = document.getElementById('keyGrid');
+  el.innerHTML = '';
+  const suffix = selMode === 'minor' ? 'm' : '';
+  CHROMATIC.forEach(n => {
+    const b = document.createElement('button');
+    b.className = 'key-btn' + (n===selKey ? ' active' : '');
+    b.textContent = n + suffix;
+    b.onclick = () => { selKey = n; render(); };
+    el.appendChild(b);
+  });
+}
+
+function renderBoxSel() {
+  const el = document.getElementById('boxSel');
+  el.innerHTML = '';
+  ['all',1,2,3,4,5].forEach(v => {
+    const b = document.createElement('button');
+    const isAll = v === 'all', on = selBox === v;
+    b.className = 'box-btn' + (on ? (isAll ? ' all' : ' on') : '');
+    b.textContent = isAll ? 'ALL' : `Бокс ${v}`;
+    b.onclick = () => { selBox = v; render(); };
+    el.appendChild(b);
+  });
+}
+
+function renderInfo() {
+  const ri    = CHROMATIC.indexOf(selKey);
+  const notes = pentaIntervals().map(i => CHROMATIC[(ri+i)%12]);
+  const suffix = selMode === 'minor' ? 'm' : '';
+  document.getElementById('iKey').textContent = selKey + suffix;
+  const iNotesEl = document.getElementById('iNotes');
+  if (selScale) {
+    const s = SCALES[selScale];
+    const pentaPcs = new Set(pentaIntervals().map(i => (ri+i)%12));
+    iNotesEl.innerHTML = s.intervals.map(iv => {
+      const pc = (ri+iv)%12, n = CHROMATIC[pc];
+      if (iv === s.char)     return `<span class="si-char">${n}</span>`;
+      if (!pentaPcs.has(pc)) return `<span class="si-ext">${n}</span>`;
+      return n;
+    }).join(' · ');
+  } else {
+    iNotesEl.textContent = notes.join(' · ');
+  }
+  document.getElementById('iBox').textContent   = selBox === 'all' ? 'Все боксы' : `Бокс ${selBox}`;
+
+  const leg = document.getElementById('boxLeg');
+  if (selBox === 'all') {
+    leg.innerHTML = '';
+    leg.className = 'box-legend show';
+    BOX_COLORS.forEach((c, i) => {
+      const item = document.createElement('div');
+      item.className = 'bl-item';
+      const sq = document.createElement('div');
+      sq.className = 'bl-sq';
+      sq.style.background = c;
+      const lbl = document.createElement('span');
+      lbl.textContent = `Бокс ${i+1}`;
+      item.appendChild(sq);
+      item.appendChild(lbl);
+      leg.appendChild(item);
+    });
+  } else {
+    leg.className = 'box-legend';
+  }
+}
+
+function renderScaleSel() {
+  const el = document.getElementById('scaleSel');
+  el.innerHTML = '';
+  const off = document.createElement('button');
+  off.className = 'scale-btn' + (!selScale ? ' active' : '');
+  off.textContent = 'Пентатоника';
+  off.onclick = () => { selScale = null; render(); };
+  el.appendChild(off);
+  const order = selMode === 'minor' ? SCALE_ORDER_MINOR : SCALE_ORDER_MAJOR;
+  order.forEach(id => {
+    const s = SCALES[id];
+    const b = document.createElement('button');
+    b.className = 'scale-btn' + (selScale === id ? ' active' : '');
+    b.textContent = '+ ' + s.name;
+    b.onclick = () => { selScale = (selScale === id) ? null : id; render(); };
+    el.appendChild(b);
+  });
+}
+
+function renderScaleInfo() {
+  const el = document.getElementById('scaleInfo');
+  const legExt = document.getElementById('legExt');
+  const legChar = document.getElementById('legChar');
+  if (legExt)  legExt.style.display  = selScale ? '' : 'none';
+  if (legChar) legChar.style.display = selScale ? '' : 'none';
+  if (!selScale) { el.className = 'scale-info'; el.innerHTML = ''; return; }
+  const s  = SCALES[selScale];
+  const ri = CHROMATIC.indexOf(selKey);
+  const pentaPcs = new Set(pentaIntervals().map(i => (ri+i)%12));
+  const noteSpans = s.intervals.map(iv => {
+    const pc = (ri+iv)%12, n = CHROMATIC[pc];
+    if (iv === s.char)     return `<span class="si-char">${n}</span>`;
+    if (!pentaPcs.has(pc)) return `<span class="si-ext">${n}</span>`;
+    return n;
+  }).join(' · ');
+  const title = s.full ? `${s.name} (${s.full})` : s.name;
+  el.className = 'scale-info show';
+  el.innerHTML =
+    `<div class="si-head"><b>${selKey} — ${title}</b><span class="si-genre">${s.genre}</span></div>` +
+    `<div class="si-notes">${noteSpans}</div>` +
+    `<div class="si-tip">💡 ${s.tip} Характерная нота: <span class="si-char">${CHROMATIC[(ri+s.char)%12]} (${s.charLabel})</span>.</div>`;
+}
+
+function renderFretboard() {
+  const fb = document.getElementById('fb');
+  fb.innerHTML = '';
+  cellMap = {};
+
+  const active = getActiveFrets(selKey, selBox);
+  const sh = semitones(selKey);
+
+  // — Гамма/лад: добавленные ноты поверх пентатоники —
+  const scaleObj = selScale ? SCALES[selScale] : null;
+  const rootPc   = CHROMATIC.indexOf(selKey);
+  const scalePcs = scaleObj ? new Set(scaleObj.intervals.map(i => (rootPc + i) % 12)) : null;
+  const charPc   = scaleObj ? (rootPc + scaleObj.char) % 12 : -1;
+  // окно ладов для добавленных нот: в режиме бокса — границы бокса, в ALL — весь гриф
+  let extMin = 0, extMax = MAX_FRET;
+  if (scaleObj && selBox !== 'all') {
+    extMin = Infinity; extMax = -Infinity;
+    active.forEach(k => { const f = +k.split('-')[1]; if (f < extMin) extMin = f; if (f > extMax) extMax = f; });
+    if (!isFinite(extMin)) { extMin = 0; extMax = MAX_FRET; }
+  }
+
+  // — Fret number header —
+  const fh = document.createElement('div');
+  fh.className = 'fh';
+
+  const nutSp = document.createElement('div');
+  nutSp.className = 'fh-nut';
+  fh.appendChild(nutSp);
+
+  SHOW_FRETS.forEach(f => {
+    const c = document.createElement('div');
+    c.className = 'fh-c';
+    c.textContent = f === 0 ? '' : f;
+    fh.appendChild(c);
+  });
+  fb.appendChild(fh);
+
+  // — String rows —
+  STR_NAMES.forEach((name, di) => {
+    const mi = STR_MIDIS[di];
+    cellMap[mi] = {};
+
+    const row = document.createElement('div');
+    row.className = `sr s${di}`;
+
+    // label
+    const lbl = document.createElement('div');
+    lbl.className = 'slbl';
+    lbl.textContent = name;
+    row.appendChild(lbl);
+
+    // nut
+    const nut = document.createElement('div');
+    nut.className = 'snut';
+    row.appendChild(nut);
+
+    // cells
+    SHOW_FRETS.forEach(fret => {
+      const cell = document.createElement('div');
+      cell.className = 'sc';
+
+      // store reference for SVG overlay
+      cellMap[mi][fret] = cell;
+
+      // fret marker dot (on bottom string row only)
+      if (fret > 0 && MARKERS.has(fret) && di === 5) {
+        const dot = document.createElement('div');
+        dot.className = 'fmark' + (fret === 12 ? ' gold' : '');
+        cell.appendChild(dot);
+      }
+
+      // note button: пентатоника ('penta'), добавленная нота гаммы ('ext'), характерная нота лада ('char')
+      const midiVal = OPEN_MIDI[mi] + fret;
+      const pc      = midiVal % 12;
+      const inPenta = active.has(`${mi}-${fret}`);
+      let kind = null;
+      if (scalePcs) {
+        if (inPenta && scalePcs.has(pc)) kind = 'penta';
+        else if (!inPenta && scalePcs.has(pc) && fret >= extMin && fret <= extMax)
+          kind = (pc === charPc) ? 'char' : 'ext';
+        // пентатоническая нота вне лада (квинта в локрийском) — не рисуем
+      } else if (inPenta) {
+        kind = 'penta';
+      }
+      if (kind) {
+        const note    = CHROMATIC[pc];
+        const isRoot  = pc === rootPc;
+
+        const btn = document.createElement('button');
+        btn.className = 'nb ' + (isRoot ? 'root' : (kind === 'penta' ? 'reg' : kind));
+        btn.textContent = noteLabels === 'intervals'
+          ? (kind === 'char' && scaleObj.charLabel ? scaleObj.charLabel : INTERVAL_SHORT[(pc - rootPc + 12) % 12])
+          : note;
+        btn.dataset.pc = pc; // pitch class для подсветки тонов аккорда
+
+        let stopFn = null;
+        const press = e => {
+          e.preventDefault();
+          if (stopFn) stopFn();
+          stopFn = startNote(midiVal);
+          btn.classList.add('held');
+        };
+        const release = e => {
+          e.preventDefault();
+          btn.classList.remove('held');
+          if (stopFn) { stopFn(); stopFn = null; }
+        };
+        btn.addEventListener('touchstart',  press,   {passive:false});
+        btn.addEventListener('touchend',    release, {passive:false});
+        btn.addEventListener('touchcancel', release, {passive:false});
+        btn.addEventListener('mousedown',   press);
+        btn.addEventListener('mouseup',     release);
+        btn.addEventListener('mouseleave',  release);
+        cell.appendChild(btn);
+      }
+
+      row.appendChild(cell);
+    });
+
+    fb.appendChild(row);
+  });
+
+  // — SVG box overlays (ALL mode only) —
+  if (selBox === 'all') {
+    // use setTimeout so layout is fully calculated first
+    setTimeout(drawBoxOverlay, 30);
+  }
+}
+
+function drawBoxOverlay() {
+  const fb = document.getElementById('fb');
+
+  // remove old
+  const prev = fb.querySelector('.box-svg');
+  if (prev) prev.remove();
+
+  const fbRect = fb.getBoundingClientRect();
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('box-svg');
+  svg.setAttribute('width',  fb.offsetWidth);
+  svg.setAttribute('height', fb.offsetHeight);
+
+  const sh    = semitones(selKey);
+  const PAD   = 4; // px padding around cells
+  const boxes = currentBoxes(); // ← минор/мажор в зависимости от режима
+
+  boxes.forEach((box, bi) => {
+    const color = BOX_COLORS[bi];
+
+    // Рисуем рамку для каждой октавы, попавшей на гриф (как в getActiveFrets)
+    [-12, 0, 12].forEach(oct => {
+      let x1=Infinity, y1=Infinity, x2=-Infinity, y2=-Infinity;
+
+      Object.entries(box).forEach(([miStr, frets]) => {
+        const mi = parseInt(miStr);
+        frets.forEach(baseFret => {
+          const fret = baseFret + sh + oct;
+          if (fret < 0 || fret > MAX_FRET) return;
+
+          const cell = cellMap[mi] && cellMap[mi][fret];
+          if (!cell) return;
+
+          const r = cell.getBoundingClientRect();
+          const lx = r.left - fbRect.left;
+          const ly = r.top  - fbRect.top;
+
+          if (lx - PAD        < x1) x1 = lx - PAD;
+          if (ly - PAD        < y1) y1 = ly - PAD;
+          if (lx + r.width  + PAD > x2) x2 = lx + r.width  + PAD;
+          if (ly + r.height + PAD > y2) y2 = ly + r.height + PAD;
+        });
+      });
+
+      if (x1 === Infinity) return;
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x',      x1);
+      rect.setAttribute('y',      y1);
+      rect.setAttribute('width',  x2 - x1);
+      rect.setAttribute('height', y2 - y1);
+      rect.setAttribute('rx',     10);
+      rect.setAttribute('fill',   'none');
+      rect.setAttribute('stroke', color);
+      rect.setAttribute('stroke-width', '2.5');
+      svg.appendChild(rect);
+
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x',           x1 + 5);
+      txt.setAttribute('y',           Math.max(10, y1 - 4));
+      txt.setAttribute('fill',        color);
+      txt.setAttribute('font-size',   '11');
+      txt.setAttribute('font-weight', '700');
+      txt.setAttribute('font-family', 'monospace');
+      txt.textContent = `Box ${bi+1}`;
+      svg.appendChild(txt);
+    });
+  });
+
+  fb.appendChild(svg);
+}
+
+// ═══ CHORD PROGRESSIONS ═══════════════════════════
+
+// Minor pentatonic relative chord degrees
+function chordClass(q) {
+  if (['i','iv','vi','i7','iv7','vi7'].includes(q)) return 'minor';
+  if (['I','II','III','IV','V','VI','VII','I7','IV7','V7'].includes(q)) return 'major';
+  return 'dom'; // доминантовые септаккорды III7/VI7/VII7/II7
+}
+function playChord(rootMidi, q) {
+  const ctx = getCtx();
+  const isMinor = ['i','iv','vi','i7','iv7','vi7'].includes(q);
+  const hasSeventh = q.includes('7');
+  const third = isMinor ? 3 : 4;
+  const notes = [rootMidi, rootMidi+third, rootMidi+7, rootMidi+12];
+  if (hasSeventh) notes.push(rootMidi + 10); // b7
+  // strum по аудио-часам (sample-accurate, без дрожания setTimeout)
+  const STRUM = 0.028; // сек между струнами
+  const t0 = ctx.currentTime;
+  const stops = notes.map((m, i) => makeVoice(m, false, { when: t0 + i * STRUM }));
+  // очистка ПОСЛЕ естественного затухания ноты — хвост не режется
+  const life = (timbre === 'distortion' ? 2.3 : 2.0) + notes.length * STRUM + 0.4;
+  setTimeout(() => stops.forEach(s => s()), life * 1000);
+}
+
+// ═══ RHYTHM PATTERNS ══════════════════════════════
+// Шаги на сетке восьмых (8) или шестнадцатых (16) в одном такте 4/4:
+// 'D' даун-страйк, 'U' ап-страйк, 'X' глушёный чик, null — пауза.
+// a:1 — акцент. swing — свинг для блюза (0.5 = ровно, ~0.62 = шаффл).
+const RHYTHMS = {
+  blues: [
+    { name:'Шаффл',        bpm:96,  grid:8,  swing:0.64, steps:[{d:'D',a:1},{d:'U'},{d:'D'},{d:'U'},{d:'D',a:1},{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'Слоу-блюз',    bpm:66,  grid:8,  swing:0.66, steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},{d:'D'},null,{d:'D'},{d:'U'}] },
+    { name:'Буги',         bpm:112, grid:8,  swing:0.64, steps:[{d:'D',a:1},null,{d:'D'},null,{d:'D',a:1},null,{d:'D'},{d:'U'}] },
+    { name:'Техас-шаффл',  bpm:104, grid:8,  swing:0.66, steps:[{d:'D',a:1},{d:'X'},{d:'D'},{d:'X'},{d:'D',a:1},{d:'X'},{d:'D'},{d:'X'}] },
+    { name:'Блюз-рок',     bpm:122, grid:8,  swing:0.56, steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},{d:'D'},null,{d:'D'},{d:'U'}] },
+    { name:'Джамп',        bpm:140, grid:8,  swing:0.62, steps:[{d:'D',a:1},{d:'U'},{d:'X'},{d:'U'},{d:'D',a:1},{d:'U'},{d:'X'},{d:'U'}] },
+    { name:'Свамп',        bpm:84,  grid:16, swing:0.6,  steps:[{d:'D',a:1},null,null,{d:'U'},{d:'X'},null,{d:'U'},null,{d:'D'},null,{d:'X'},{d:'U'},{d:'X'},null,{d:'U'},null] },
+    { name:'12/8 блюз',    bpm:60,  grid:12, swing:0.5,  steps:[{d:'D',a:1},{d:'U'},{d:'D'},{d:'D',a:1},{d:'U'},{d:'D'},{d:'D',a:1},{d:'U'},{d:'D'},{d:'D',a:1},{d:'U'},{d:'D'}] },
+  ],
+  rock: [
+    { name:'Восьмые',      bpm:120, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'}] },
+    { name:'Драйв',        bpm:132, grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},null,{d:'U'},{d:'D',a:1},{d:'U'}] },
+    { name:'Панк',         bpm:168, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D',a:1},{d:'D'}] },
+    { name:'Галоп',        bpm:112, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'D'},{d:'D'},null,{d:'D'},{d:'D'},{d:'D',a:1},null,{d:'D'},{d:'D'},{d:'D'},null,{d:'D'},{d:'D'}] },
+    { name:'Хаф-тайм',     bpm:86,  grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,null,{d:'U'},{d:'X'},null,{d:'D'},{d:'U'}] },
+    { name:'Стадион',      bpm:128, grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,null,{d:'D'},{d:'D',a:1},null,{d:'D'},null] },
+    { name:'Хард-рок',     bpm:138, grid:16, swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'X'},{d:'D'},{d:'D'},{d:'X'},{d:'D'},{d:'D'},{d:'D',a:1},{d:'D'},{d:'X'},{d:'D'},{d:'D'},{d:'X'},{d:'D'},{d:'D'}] },
+    { name:'Гранж',        bpm:108, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},null,{d:'U'},{d:'D',a:1},null,{d:'U'},{d:'D'}] },
+  ],
+  pop: [
+    { name:'D–DU–UDU',     bpm:100, grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},null,{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'Баллада',      bpm:76,  grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,null,{d:'U'},{d:'D'},{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'Кантри',       bpm:116, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'U'},{d:'D'},{d:'U'},{d:'D',a:1},{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'16-е акустика',bpm:92,  grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},null,{d:'U'},{d:'D'},null,{d:'D',a:1},null,{d:'D'},{d:'U'},null,{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'Синкопа',      bpm:104, grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},null,{d:'U',a:1},null,{d:'U'}] },
+    { name:'Регги-поп',    bpm:96,  grid:8,  swing:0.5,  steps:[null,{d:'U'},{d:'D',a:1},{d:'U'},null,{d:'U'},{d:'D',a:1},{d:'U'}] },
+    { name:'Фолк',         bpm:120, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},{d:'D'},{d:'U'},{d:'D'},{d:'U'},{d:'D',a:1},null,{d:'D'},{d:'U'},{d:'D'},{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'Поп-рок',      bpm:116, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'U'},null,{d:'D'},{d:'U'},{d:'D'},{d:'U'}] },
+  ],
+  funk: [
+    { name:'Фанк 16-е',    bpm:104, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'X'},{d:'U'},{d:'X'},null,{d:'U'},null,{d:'X'},{d:'U'},null,{d:'U'},{d:'D',a:1},null,{d:'X'},{d:'U'}] },
+    { name:'Чики-грув',    bpm:96,  grid:16, swing:0.5,  steps:[{d:'X'},{d:'X'},{d:'D',a:1},null,{d:'X'},{d:'X'},{d:'U'},null,{d:'X'},{d:'X'},{d:'D',a:1},null,{d:'X'},{d:'U'},{d:'X'},{d:'U'}] },
+    { name:'Джей-Би',      bpm:100, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,null,null,{d:'X'},null,{d:'X'},{d:'U'},null,{d:'U'},{d:'X'},null,{d:'X'},null,{d:'U'},null] },
+    { name:'Свинг-фанк',   bpm:98,  grid:16, swing:0.58, steps:[{d:'D',a:1},null,{d:'X'},{d:'U'},null,null,{d:'X'},null,{d:'U'},null,{d:'X'},{d:'U'},{d:'D',a:1},null,null,null] },
+    { name:'Диско',        bpm:118, grid:16, swing:0.5,  steps:[{d:'X'},null,{d:'U',a:1},null,{d:'X'},null,{d:'U',a:1},null,{d:'X'},null,{d:'U',a:1},null,{d:'X'},null,{d:'U',a:1},null] },
+    { name:'Хендрикс',     bpm:92,  grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'U'},null,{d:'X'},{d:'U'},null,{d:'D'},null,{d:'U'},{d:'X'},null,{d:'D',a:1},null,{d:'U'},null] },
+    { name:'Нью-фанк',     bpm:108, grid:16, swing:0.5,  steps:[{d:'X'},{d:'U'},{d:'D',a:1},{d:'U'},{d:'X'},{d:'X'},{d:'U'},null,{d:'D'},{d:'U'},{d:'X'},{d:'U'},{d:'X'},null,{d:'U'},{d:'X'}] },
+    { name:'Минимал',      bpm:100, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,null,null,null,null,{d:'X'},{d:'U'},null,null,{d:'D',a:1},null,null,null,{d:'X'},null] },
+  ],
+  reggae: [
+    { name:'Скэнк',        bpm:80,  grid:8,  swing:0.5,  steps:[null,null,{d:'D',a:1},null,null,null,{d:'D',a:1},null] },
+    { name:'Скэнк 2x',     bpm:84,  grid:8,  swing:0.5,  steps:[null,{d:'U'},{d:'D',a:1},null,null,{d:'U'},{d:'D',a:1},null] },
+    { name:'Двойной чоп',  bpm:76,  grid:16, swing:0.5,  steps:[null,null,null,null,{d:'D',a:1},{d:'U'},null,null,null,null,null,null,{d:'D',a:1},{d:'U'},null,null] },
+    { name:'Ска',          bpm:138, grid:8,  swing:0.5,  steps:[null,{d:'U',a:1},null,{d:'U'},null,{d:'U',a:1},null,{d:'U'}] },
+    { name:'Рокстеди',     bpm:70,  grid:8,  swing:0.5,  steps:[null,null,{d:'D',a:1},null,{d:'X'},null,{d:'D',a:1},null] },
+    { name:'Уан-дроп',     bpm:74,  grid:16, swing:0.5,  steps:[null,null,null,null,null,null,null,null,{d:'D',a:1},{d:'U'},null,null,null,null,null,null] },
+    { name:'Степперс',     bpm:82,  grid:8,  swing:0.5,  steps:[{d:'X'},null,{d:'D',a:1},null,{d:'X'},null,{d:'D',a:1},null] },
+    { name:'Даб',          bpm:72,  grid:16, swing:0.5,  steps:[null,null,null,null,{d:'D',a:1},{d:'U'},null,null,null,null,{d:'X'},null,{d:'D',a:1},{d:'U'},null,null] },
+  ],
+};
+
+// Один штрих боя: down — все ноты аккорда, up — верхние, X — чик
+function playStrumStroke(notes, when, step, noteDur) {
+  if (!step) return;
+  const vel = step.a ? 1.0 : 0.62;
+  if (step.d === 'X') { chick(when, vel); return; }
+  const STRUM = 0.012; // сек между струнами внутри штриха
+  let seq = notes;
+  if (step.d === 'U') seq = notes.slice(-3).reverse(); // ап-страйк: верхние струны, снизу вверх
+  seq.forEach((m, i) => {
+    makeVoice(m, false, { when: when + i * STRUM, dur: noteDur, vel: step.d === 'U' ? vel * 0.7 : vel });
+  });
+}
+
+function chordNotes(rootMidi, q) {
+  const isMinor = ['i','iv','vi','i7','iv7','vi7'].includes(q);
+  const third = isMinor ? 3 : 4;
+  const notes = [rootMidi, rootMidi+third, rootMidi+7, rootMidi+12];
+  if (q.includes('7')) notes.push(rootMidi + 10);
+  return notes.sort((a,b)=>a-b);
+}
+
+// ═══ PROGRESSION PLAYER ═══════════════════════════
+const player = {
+  running:false, prog:null, ri:0, rhythm:null, bpm:100,
+  bar:0, nextBarTime:0, timer:null, raf:null, lastBar:-1,
+  cardEl:null, events:[],   // events: {time, stepIdx} для подсветки
+  metro:false, countIn:false, countEvents:[], // метроном и отсчёт «1-2-3-4»
+};
+let metroOn = false; // глобальная настройка: клик метронома во время игры
+let rhythmOnlyOn = false; // режим «только ритм»: луп на одной тонике (отработка боя)
+
+function stopPlayer() {
+  if (player.timer) { clearInterval(player.timer); player.timer = null; }
+  if (player.raf)   { cancelAnimationFrame(player.raf); player.raf = null; }
+  player.running = false;
+  player.events = [];
+  player.countEvents = [];
+  player.lastBar = -1;
+  document.querySelectorAll('.count-in').forEach(b => b.remove());
+  document.querySelectorAll('.chord-pill.playing').forEach(p => p.classList.remove('playing'));
+  document.querySelectorAll('.rs-step.on').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.play-btn.playing').forEach(b => { b.classList.remove('playing'); b.textContent = '▶'; });
+  highlightChordTones(null);
+}
+
+// Подсветка тонов звучащего аккорда среди нот пентатоники на грифе
+function highlightChordTones(pcs, rootPc) {
+  document.querySelectorAll('.nb').forEach(b => {
+    const pc = parseInt(b.dataset.pc);
+    const isTone = pcs ? pcs.includes(pc) : false;
+    b.classList.toggle('ct',      isTone && pc !== rootPc);
+    b.classList.toggle('ct-root', isTone && pc === rootPc);
+  });
+}
+
+function scheduleBar(barIdx, barStart) {
+  const r     = player.rhythm;
+  const beat  = 60 / player.bpm;
+  const barLen = beat * 4;
+  const stepLen = barLen / r.grid;
+  const ch    = player.rhythmOnly ? player.prog.degrees[0] : player.prog.degrees[barIdx % player.prog.degrees.length];
+  const rootMidi = 48 + ((player.ri + ch.d) % 12);
+  const notes = chordNotes(rootMidi, ch.q);
+  const pairSpan = stepLen * 2;
+
+  r.steps.forEach((step, i) => {
+    if (!step) return;
+    let t;
+    if (i % 2 === 0) t = barStart + (i/2) * pairSpan;
+    else             t = barStart + ((i-1)/2) * pairSpan + pairSpan * r.swing; // свинг смещает офф-бит
+    // длительность ноты: до конца такта, но не больше 1.6с; скэнк — короткий стаккато
+    const isSkank = player.prog.genre === 'reggae';
+    const noteDur = isSkank ? 0.22 : Math.min(1.6, barStart + barLen - t + 0.1);
+    playStrumStroke(notes, t, step, noteDur);
+    player.events.push({ time: t, stepIdx: i, barIdx });
+  });
+  // клик метронома на каждую из 4 долей (акцент на 1-ю)
+  if (player.metro) {
+    for (let b = 0; b < 4; b++) metroClick(barStart + b * beat, b === 0);
+  }
+  return barLen;
+}
+
+function playerTick() {
+  const ctx = getCtx();
+  const LOOKAHEAD = 0.25;
+  while (player.nextBarTime < ctx.currentTime + LOOKAHEAD) {
+    const barLen = scheduleBar(player.bar, player.nextBarTime);
+    player.nextBarTime += barLen;
+    player.bar++;
+  }
+  // чистим прошедшие события подсветки (окно ≥ длины такта, иначе на медленном темпе подсветка застывает)
+  const barLen = (60 / player.bpm) * 4;
+  player.events = player.events.filter(e => e.time > ctx.currentTime - Math.max(2, barLen + 0.5));
+}
+
+function playerHighlight() {
+  if (!player.running) return;
+  const ctx = getCtx();
+  const t = ctx.currentTime;
+
+  // Отсчёт «1-2-3-4» перед стартом — крупная цифра в карточке
+  let countNum = 0;
+  for (const e of player.countEvents) { if (e.time <= t + 0.02) countNum = e.n; }
+  const stillCounting = player.countEvents.length && t < player.nextBarTime - 0.02;
+  if (player.cardEl) {
+    let badge = player.cardEl.querySelector('.count-in');
+    if (stillCounting && countNum > 0) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'count-in';
+        player.cardEl.appendChild(badge);
+      }
+      if (badge.dataset.n !== String(countNum)) {
+        badge.dataset.n = String(countNum);
+        badge.textContent = countNum;
+        badge.classList.remove('pulse'); void badge.offsetWidth; badge.classList.add('pulse');
+      }
+    } else if (badge) {
+      badge.remove();
+    }
+  }
+
+  // текущий такт → подсветка аккорда
+  let cur = null;
+  for (const e of player.events) { if (e.time <= t + 0.02) cur = e; }
+  if (cur && player.cardEl) {
+    const pills = player.cardEl.querySelectorAll('.chord-pill');
+    const idx = player.rhythmOnly ? 0 : cur.barIdx % player.prog.degrees.length;
+    pills.forEach((p, i) => p.classList.toggle('playing', i === idx));
+    const strip = player.cardEl.querySelectorAll('.rs-step');
+    strip.forEach((sEl, i) => sEl.classList.toggle('on', i === cur.stepIdx));
+    // тоны аккорда на грифе — обновляем при смене такта
+    if (cur.barIdx !== player.lastBar) {
+      player.lastBar = cur.barIdx;
+      const ch = player.prog.degrees[idx];
+      const rootPc = (player.ri + ch.d) % 12;
+      const pcs = chordNotes(48 + rootPc, ch.q).map(m => m % 12);
+      highlightChordTones(pcs, rootPc);
+    }
+  }
+  player.raf = requestAnimationFrame(playerHighlight);
+}
+
+function startPlayer(prog, ri, cardEl, rhythmIdx) {
+  stopPlayer();
+  stopAllNotes();
+  const ctx = getCtx();
+  const pats = RHYTHMS[prog.genre] || RHYTHMS.rock;
+  player.prog    = prog;
+  player.ri      = ri;
+  player.rhythm  = pats[rhythmIdx] || pats[0];
+  player.bpm     = parseInt(cardEl.querySelector('.bpm-inp')?.value) || player.rhythm.bpm;
+  player.bar     = 0;
+  player.cardEl  = cardEl;
+  player.events  = [];
+  player.metro   = metroOn;
+  player.rhythmOnly = rhythmOnlyOn;
+  player.countEvents = [];
+  player.running = true;
+
+  player.nextBarTime = ctx.currentTime + 0.12;  // старт сразу, без отсчёта
+
+  player.timer = setInterval(playerTick, 80);
+  playerTick();
+  playerHighlight();
+}
+
+function chordLabel(ch, ri) {
+  const noteName = CHROMATIC[(ri + ch.d) % 12];
+  const q = ch.q;
+  // Определяем суффикс для отображения
+  if (['i7','iv7','vi7'].includes(q)) return noteName + 'm7';
+  if (['i','iv','vi'].includes(q))    return noteName + 'm';
+  if (['I7','IV7','V7','II7','VI7','VII7'].includes(q)) return noteName + '7';
+  if (['I','IV','V','II'].includes(q)) return noteName;
+  if (q.endsWith('7')) return noteName + '7';
+  return noteName;
+}
+
+// genre: blues | rock | pop | funk | reggae
+const PROGRESSIONS_MINOR = [
+  // BLUES
+  { genre:'blues', name:'12-Bar Blues (классика)', degrees:[{d:0,q:'i7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:7,q:'V7'}], tip:'Классика. 12 тактов. Пентатоника от тоники работает везде.' },
+  { genre:'blues', name:'8-Bar Blues (Am форма)', degrees:[{d:0,q:'i'},{d:0,q:'i'},{d:5,q:'IV7'},{d:0,q:'i'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'i'},{d:7,q:'V7'}], tip:'8 тактов. Твоя прогрессия — Am Am D7 Am E7 D7 Am E7.' },
+  { genre:'blues', name:'8-Bar Blues (вариант 2)', degrees:[{d:0,q:'i7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:7,q:'V7'},{d:0,q:'i7'}], tip:'Ещё один 8-тактовый вариант. Quick change на 2-м такте.' },
+  { genre:'blues', name:'12-Bar Quick Change', degrees:[{d:0,q:'i7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:7,q:'V7'}], tip:'Quick change — IV7 уже во втором такте. Звучит энергичнее.' },
+  { genre:'blues', name:'Minor Blues (12-bar)', degrees:[{d:0,q:'i7'},{d:5,q:'iv7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'iv7'},{d:5,q:'iv7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:8,q:'VI7'},{d:7,q:'V7'},{d:0,q:'i7'},{d:7,q:'V7'}], tip:'Минорный блюз с iv7. Темнее и тяжелее классики.' },
+  { genre:'blues', name:'Turnaround i–VI–IV–V', degrees:[{d:0,q:'i'},{d:8,q:'VI7'},{d:5,q:'IV7'},{d:7,q:'V7'}], tip:'Turnaround — финальные 4 такта блюза. Ведёт обратно к тонике.' },
+  { genre:'blues', name:'Slow Blues i–iv–i–V', degrees:[{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'iv7'},{d:5,q:'iv7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:7,q:'V7'},{d:5,q:'iv7'}], tip:'Медленный блюз. Больше пространства для соло и бендов.' },
+  { genre:'blues', name:'Jazz Blues i–IV–VII–III', degrees:[{d:0,q:'i7'},{d:5,q:'IV7'},{d:10,q:'VII7'},{d:3,q:'III7'},{d:8,q:'VI7'},{d:7,q:'V7'},{d:0,q:'i7'},{d:7,q:'V7'}], tip:'Блюз с джазовыми заменами. Сложнее, но очень красиво.' },
+  // ROCK
+  { genre:'rock', name:'i – VII – VI – VII', degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:10,q:'VII'}], tip:'Основа хард-рока. Пентатоника звучит мощно.' },
+  { genre:'rock', name:'i – VI – III – VII', degrees:[{d:0,q:'i'},{d:8,q:'VI'},{d:3,q:'III'},{d:10,q:'VII'}], tip:'Поп-рок. Ноты 1, b3, 5 звучат красиво.' },
+  { genre:'rock', name:'i – VII – VI – V',   degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:7,q:'V'}],  tip:'Андалузская каденция. Очень выразительно.' },
+  { genre:'rock', name:'i – iv – VII – i',   degrees:[{d:0,q:'i'},{d:5,q:'iv'},{d:10,q:'VII'},{d:0,q:'i'}],  tip:'Тяжёлый рок. Синкопы + пентатоника = огонь.' },
+  { genre:'rock', name:'i – III – VII – VI', degrees:[{d:0,q:'i'},{d:3,q:'III'},{d:10,q:'VII'},{d:8,q:'VI'}], tip:'Металл и хард-рок. Нисходящая линия.' },
+  { genre:'rock', name:'i – iv – i – V',     degrees:[{d:0,q:'i'},{d:5,q:'iv'},{d:0,q:'i'},{d:7,q:'V'}],     tip:'Классический рок-н-ролл в миноре.' },
+  // POP
+  { genre:'pop', name:'i – VI – III – VII',  degrees:[{d:0,q:'i'},{d:8,q:'VI'},{d:3,q:'III'},{d:10,q:'VII'}], tip:'Самая популярная минорная поп-прогрессия.' },
+  { genre:'pop', name:'i – VII – VI – VII',  degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:10,q:'VII'}], tip:'Встречается в тысячах поп-хитов.' },
+  { genre:'pop', name:'i – V – VI – III',    degrees:[{d:0,q:'i'},{d:7,q:'V'},{d:8,q:'VI'},{d:3,q:'III'}],    tip:'Эмоциональная прогрессия. Медленный темп.' },
+  { genre:'pop', name:'i – VI – VII – i',    degrees:[{d:0,q:'i'},{d:8,q:'VI'},{d:10,q:'VII'},{d:0,q:'i'}],   tip:'Простая и цепляющая. Хороша для куплета.' },
+  // FUNK
+  { genre:'funk', name:'i – i – iv – i',     degrees:[{d:0,q:'i'},{d:0,q:'i'},{d:5,q:'iv'},{d:0,q:'i'}],      tip:'Фанк-грув. Акцент на 2 и 4 доле.' },
+  { genre:'funk', name:'i7 – IV7',           degrees:[{d:0,q:'i7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:5,q:'IV7'}],  tip:'Два аккорда — бесконечный грув. Пентатоника ± b7.' },
+  { genre:'funk', name:'i – III – iv – VII', degrees:[{d:0,q:'i'},{d:3,q:'III'},{d:5,q:'iv'},{d:10,q:'VII'}],  tip:'Соул и фанк. Синкопированные ноты пентатоники.' },
+  { genre:'funk', name:'i – VII – i – VII',  degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:0,q:'i'},{d:10,q:'VII'}],  tip:'Минималистичный фанк. Ритм важнее гармонии.' },
+  // REGGAE
+  { genre:'reggae', name:'i – VII – VI – VII', degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:10,q:'VII'}], tip:'Reggae skank. Акцент на "и" доле.' },
+  { genre:'reggae', name:'i – iv',              degrees:[{d:0,q:'i'},{d:5,q:'iv'},{d:0,q:'i'},{d:5,q:'iv'}],      tip:'Два аккорда — дыши и качайся.' },
+  { genre:'reggae', name:'i – VII – VI – V',    degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:7,q:'V'}],   tip:'Roots reggae. Медленно и глубоко.' },
+  { genre:'reggae', name:'i – VI – VII – i',    degrees:[{d:0,q:'i'},{d:8,q:'VI'},{d:10,q:'VII'},{d:0,q:'i'}],   tip:'Dancehall. Попробуй стаккато ноты пентатоники.' },
+];
+
+const PROGRESSIONS_MAJOR = [
+  // BLUES
+  { genre:'blues', name:'12-Bar Blues (классика)', degrees:[{d:0,q:'I7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:7,q:'V7'}], tip:'Классика. Мажорная пентатоника — идеальный выбор.' },
+  { genre:'blues', name:'12-Bar Quick Change', degrees:[{d:0,q:'I7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:7,q:'V7'}], tip:'Quick change — IV7 во втором такте. Характерный блюзовый приём.' },
+  { genre:'blues', name:'8-Bar Blues', degrees:[{d:0,q:'I7'},{d:0,q:'I7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'I7'}], tip:'8 тактов. Компактная форма, популярна в блюз-роке.' },
+  { genre:'blues', name:'Slow Blues I–IV–I–V', degrees:[{d:0,q:'I7'},{d:0,q:'I7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:7,q:'V7'},{d:5,q:'IV7'}], tip:'Медленный блюз. Много пространства для пентатоники.' },
+  { genre:'blues', name:'Turnaround I–vi–IV–V', degrees:[{d:0,q:'I7'},{d:9,q:'vi7'},{d:5,q:'IV7'},{d:7,q:'V7'}], tip:'Классический turnaround. Последние 4 такта 12-bar блюза.' },
+  { genre:'blues', name:'Shuffle I–IV–V', degrees:[{d:0,q:'I7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:0,q:'I7'},{d:5,q:'IV7'},{d:0,q:'I7'},{d:7,q:'V7'},{d:5,q:'IV7'}], tip:'Блюз-шаффл. Триольное ощущение, характерный блюзовый грув.' },
+  // ROCK
+  { genre:'rock', name:'I – IV – V',         degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:7,q:'V'},{d:7,q:'V'}],        tip:'Основа рок-н-ролла. Три аккорда — тысяча песен.' },
+  { genre:'rock', name:'I – V – IV – V',     degrees:[{d:0,q:'I'},{d:7,q:'V'},{d:5,q:'IV'},{d:7,q:'V'}],        tip:'Классический рок. Агрессивно и энергично.' },
+  { genre:'rock', name:'I – IV – I – V',     degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:0,q:'I'},{d:7,q:'V'}],        tip:'Кантри-рок. Пентатоника звучит натурально.' },
+  { genre:'rock', name:'I – II – IV – I',    degrees:[{d:0,q:'I'},{d:2,q:'II'},{d:5,q:'IV'},{d:0,q:'I'}],        tip:'Нестандартная прогрессия. II придаёт напряжение.' },
+  // POP
+  { genre:'pop', name:'I – V – VI – IV',    degrees:[{d:0,q:'I'},{d:7,q:'V'},{d:9,q:'vi'},{d:5,q:'IV'}],       tip:'Самая популярная поп-прогрессия всех времён.' },
+  { genre:'pop', name:'I – VI – IV – V',    degrees:[{d:0,q:'I'},{d:9,q:'vi'},{d:5,q:'IV'},{d:7,q:'V'}],       tip:'50-е, doo-wop, поп-рок.' },
+  { genre:'pop', name:'I – IV – VI – V',    degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:9,q:'vi'},{d:7,q:'V'}],       tip:'Лёгкая поп-прогрессия. Куплет или припев.' },
+  { genre:'pop', name:'VI – IV – I – V',    degrees:[{d:9,q:'vi'},{d:5,q:'IV'},{d:0,q:'I'},{d:7,q:'V'}],       tip:'Начало с минорного VI — эмоциональный эффект.' },
+  // FUNK
+  { genre:'funk', name:'I – IV',            degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:0,q:'I'},{d:5,q:'IV'}],        tip:'Два аккорда — чистый фанк-грув.' },
+  { genre:'funk', name:'I – II – I – II',   degrees:[{d:0,q:'I'},{d:2,q:'II'},{d:0,q:'I'},{d:2,q:'II'}],        tip:'Фанк с II ступенью. Лаконично и эффективно.' },
+  { genre:'funk', name:'I – IV – V – IV',   degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:7,q:'V'},{d:5,q:'IV'}],        tip:'Соул-фанк. Пентатоника + синкопы.' },
+  // REGGAE
+  { genre:'reggae', name:'I – IV – V – IV', degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:7,q:'V'},{d:5,q:'IV'}],        tip:'One drop reggae. Расслабленно и глубоко.' },
+  { genre:'reggae', name:'I – V',           degrees:[{d:0,q:'I'},{d:7,q:'V'},{d:0,q:'I'},{d:7,q:'V'}],          tip:'Минимализм. Акцент на офбит — главное в регги.' },
+  { genre:'reggae', name:'I – IV',          degrees:[{d:0,q:'I'},{d:5,q:'IV'},{d:0,q:'I'},{d:5,q:'IV'}],        tip:'Ska и early reggae. Быстрый скэнк.' },
+];
+
+const GENRES = [
+  { id:'all',    label:'Все' },
+  { id:'blues',  label:'Блюз' },
+  { id:'rock',   label:'Рок' },
+  { id:'pop',    label:'Поп' },
+  { id:'funk',   label:'Фанк' },
+  { id:'reggae', label:'Регги' },
+];
+
+let selGenre = 'all';
+
+function renderGenreFilter() {
+  const el = document.getElementById('genreFilter');
+  el.innerHTML = '';
+  GENRES.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = 'genre-btn' + (selGenre === g.id ? ' active' : '');
+    btn.dataset.genre = g.id;
+    btn.textContent = g.label;
+    btn.onclick = () => {
+      selGenre = g.id;
+      if (player.running) { stopPlayer(); stopAllNotes(); }
+      saveState();
+      renderProgressions();
+      renderGenreFilter();
+    };
+    el.appendChild(btn);
+  });
+}
+
+function renderProgressions() {
+  const list  = document.getElementById('progList');
+  list.innerHTML = '';
+  const ri    = CHROMATIC.indexOf(selKey);
+  const all   = selMode === 'minor' ? PROGRESSIONS_MINOR : PROGRESSIONS_MAJOR;
+  const progs = selGenre === 'all' ? all : all.filter(p => p.genre === selGenre);
+
+  progs.forEach(prog => {
+    const item = document.createElement('div');
+    item.className = 'prog-item';
+
+    // Genre tag + name
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+    const tag = document.createElement('span');
+    const gColors = {blues:'#e84a6a',rock:'#e87a4a',pop:'#4a90e8',funk:'#4ab840',reggae:'#c04ae8'};
+    tag.style.cssText = `font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:10px;background:${gColors[prog.genre]}22;color:${gColors[prog.genre]};font-weight:600;`;
+    tag.textContent = GENRES.find(g => g.id === prog.genre)?.label || prog.genre;
+    const nameEl = document.createElement('span');
+    nameEl.style.cssText = 'font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);';
+    nameEl.textContent = prog.name;
+    header.appendChild(tag);
+    header.appendChild(nameEl);
+
+    // ▶ запуск джем-лупа с ритмом жанра
+    const playBtn = document.createElement('button');
+    playBtn.className = 'play-btn';
+    playBtn.textContent = '▶';
+    playBtn.title = 'Играть прогрессию с ритмом';
+    header.appendChild(playBtn);
+    item.appendChild(header);
+
+    // Панель ритма (раскрывается при игре): выбор боя + BPM + полоска штрихов
+    const pats = RHYTHMS[prog.genre] || RHYTHMS.rock;
+    const prefKey = prog.genre + '|' + prog.name;
+    const pref = jamPrefs[prefKey] || {};
+    let selPat = (Number.isInteger(pref.pat) && pref.pat >= 0 && pref.pat < pats.length) ? pref.pat : 0;
+    const startBpm = (pref.bpm >= 50 && pref.bpm <= 180) ? pref.bpm : pats[selPat].bpm;
+    function saveJamPref() {
+      jamPrefs[prefKey] = { pat: selPat, bpm: parseInt(bpmInp.value) };
+      saveState();
+    }
+    const rPanel = document.createElement('div');
+    rPanel.className = 'rhythm-panel';
+
+    const patRow = document.createElement('div');
+    patRow.className = 'rp-row';
+    const patBtns = [];
+    pats.forEach((p, pi) => {
+      const pb = document.createElement('button');
+      pb.className = 'pat-btn' + (pi === selPat ? ' active' : '');
+      pb.textContent = p.name;
+      pb.onclick = () => {
+        selPat = pi;
+        patBtns.forEach((b,bi) => b.classList.toggle('active', bi === pi));
+        bpmInp.value = pats[pi].bpm;
+        bpmVal.textContent = pats[pi].bpm;
+        drawStrip();
+        saveJamPref();
+        if (player.running && player.cardEl === item) startPlayer(prog, ri, item, selPat);
+      };
+      patBtns.push(pb);
+      patRow.appendChild(pb);
+    });
+    rPanel.appendChild(patRow);
+
+    const bpmRow = document.createElement('div');
+    bpmRow.className = 'rp-row';
+    const bpmLbl = document.createElement('span');
+    bpmLbl.className = 'bpm-lbl'; bpmLbl.textContent = 'BPM';
+    const bpmInp = document.createElement('input');
+    bpmInp.type = 'range'; bpmInp.min = 50; bpmInp.max = 180; bpmInp.value = startBpm;
+    bpmInp.className = 'bpm-inp';
+    const bpmVal = document.createElement('span');
+    bpmVal.className = 'bpm-val'; bpmVal.textContent = startBpm;
+    bpmInp.oninput = () => {
+      bpmVal.textContent = bpmInp.value;
+      if (player.running && player.cardEl === item) player.bpm = parseInt(bpmInp.value);
+    };
+    bpmInp.onchange = saveJamPref; // пишем в память, когда отпустили слайдер
+    bpmRow.appendChild(bpmLbl); bpmRow.appendChild(bpmInp); bpmRow.appendChild(bpmVal);
+    // переключатель метронома
+    const metroBtn = document.createElement('button');
+    metroBtn.className = 'metro-btn' + (metroOn ? ' on' : '');
+    metroBtn.textContent = '🎵';
+    metroBtn.title = 'Метроном (клик по долям)';
+    metroBtn.onclick = () => {
+      metroOn = !metroOn;
+      metroBtn.classList.toggle('on', metroOn);
+      if (player.running && player.cardEl === item) player.metro = metroOn;
+      saveState();
+    };
+    bpmRow.appendChild(metroBtn);
+    // тап-темпо: настучать BPM
+    const tapBtn = document.createElement('button');
+    tapBtn.className = 'tap-btn';
+    tapBtn.textContent = 'TAP';
+    tapBtn.title = 'Настучи темп пальцем';
+    let taps = [];
+    tapBtn.onclick = () => {
+      const now = performance.now();
+      if (taps.length && now - taps[taps.length-1] > 2000) taps = []; // пауза >2с → сброс
+      taps.push(now);
+      if (taps.length > 5) taps.shift();
+      if (taps.length >= 2) {
+        let sum = 0;
+        for (let k = 1; k < taps.length; k++) sum += taps[k] - taps[k-1];
+        let bpm = Math.round(60000 / (sum / (taps.length - 1)));
+        bpm = Math.max(50, Math.min(180, bpm));
+        bpmInp.value = bpm; bpmVal.textContent = bpm;
+        if (player.running && player.cardEl === item) player.bpm = bpm;
+        saveJamPref();
+      }
+      tapBtn.classList.add('flash'); setTimeout(() => tapBtn.classList.remove('flash'), 120);
+    };
+    bpmRow.appendChild(tapBtn);
+    rPanel.appendChild(bpmRow);
+
+    const strip = document.createElement('div');
+    strip.className = 'rhythm-strip';
+    function drawStrip() {
+      strip.innerHTML = '';
+      const p = pats[selPat];
+      p.steps.forEach((st, si) => {
+        const sp = document.createElement('span');
+        sp.className = 'rs-step' + (st && st.a ? ' acc' : '') + (!st ? ' rest' : '');
+        sp.textContent = !st ? '·' : (st.d === 'D' ? '↓' : st.d === 'U' ? '↑' : '✕');
+        // разделитель долей
+        if (si % (p.grid / 4) === 0 && si > 0) sp.classList.add('beat');
+        strip.appendChild(sp);
+      });
+    }
+    drawStrip();
+    rPanel.appendChild(strip);
+
+    const legend = document.createElement('div');
+    legend.className = 'rs-legend';
+    legend.textContent = '↓ вниз · ↑ вверх · ✕ глушение · крупные — акцент';
+    rPanel.appendChild(legend);
+
+    // режим «только ритм» — луп на одной тонике, чтобы отрабатывать бой
+    const optRow = document.createElement('div');
+    optRow.className = 'rp-row';
+    const roBtn = document.createElement('button');
+    roBtn.className = 'ro-btn' + (rhythmOnlyOn ? ' on' : '');
+    roBtn.textContent = '🔁 Только ритм';
+    roBtn.title = 'Луп на одной тонике — отрабатывать сам бой без смен аккордов';
+    roBtn.onclick = () => {
+      rhythmOnlyOn = !rhythmOnlyOn;
+      roBtn.classList.toggle('on', rhythmOnlyOn);
+      if (player.running && player.cardEl === item) player.rhythmOnly = rhythmOnlyOn;
+    };
+    optRow.appendChild(roBtn);
+    rPanel.appendChild(optRow);
+    item.appendChild(rPanel);
+
+    playBtn.onclick = () => {
+      if (player.running && player.cardEl === item) {
+        stopPlayer();
+        stopAllNotes();
+      } else {
+        startPlayer(prog, ri, item, selPat);
+        document.querySelectorAll('.rhythm-panel.open').forEach(p => p.classList.remove('open'));
+        rPanel.classList.add('open');
+        playBtn.classList.add('playing');
+        playBtn.textContent = '■';
+      }
+    };
+
+    const chordsEl = document.createElement('div');
+    chordsEl.className = 'prog-chords';
+
+    prog.degrees.forEach((ch, ci) => {
+      const rootMidi = 48 + ((ri + ch.d) % 12);
+      const label = chordLabel(ch, ri);
+
+      if (ci > 0) {
+        const arr = document.createElement('span');
+        arr.className = 'prog-arrow';
+        arr.textContent = '›';
+        chordsEl.appendChild(arr);
+      }
+
+      const pill = document.createElement('button');
+      pill.className = 'chord-pill ' + chordClass(ch.q);
+      pill.textContent = label;
+
+      const fire = () => {
+        if (player.running) return; // во время лупа пилюли только подсвечиваются, ручной тап не мешаем
+        chordsEl.querySelectorAll('.chord-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        playChord(rootMidi, ch.q);
+        if (!player.running) {
+          const rootPc = rootMidi % 12;
+          highlightChordTones(chordNotes(rootMidi, ch.q).map(m => m % 12), rootPc);
+          setTimeout(() => { if (!player.running) highlightChordTones(null); }, 1300);
+        }
+        setTimeout(() => pill.classList.remove('active'), 1300);
+      };
+      // тап без прокрутки → играем; вертикальный свайп → скроллим страницу
+      let tStartY = 0, tMoved = false;
+      pill.addEventListener('touchstart', e => { tStartY = e.touches[0].clientY; tMoved = false; }, {passive:true});
+      pill.addEventListener('touchmove',  e => { if (Math.abs(e.touches[0].clientY - tStartY) > 10) tMoved = true; }, {passive:true});
+      pill.addEventListener('touchend',   e => { if (tMoved) return; e.preventDefault(); fire(); }, {passive:false});
+      pill.addEventListener('mousedown',  e => { e.preventDefault(); fire(); });
+      chordsEl.appendChild(pill);
+    });
+
+    item.appendChild(chordsEl);
+
+    const tip = document.createElement('div');
+    tip.className = 'prog-hint';
+    tip.textContent = '💡 ' + prog.tip;
+    item.appendChild(tip);
+
+    list.appendChild(item);
+  });
+}
+
+// ═══ TAB SWITCHING ════════════════════════════════
+function switchTab(tab) {
+  stopAllNotes();
+  activeTab = tab;
+  saveState();
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    if (b.getAttribute('onclick').includes(tab)) b.classList.add('active');
+  });
+  if (tab === 'chords') renderChordExplorer();
+}
+
+// ═══ CHORD EXPLORER ═══════════════════════════════
+
+// Chord types: id, label, description, intervals [semitones from root]
+const CHORD_TYPES = [
+  { id:'maj',   label:'maj',   desc:'Мажор',           intervals:[0,4,7] },
+  { id:'m',     label:'m',     desc:'Минор',           intervals:[0,3,7] },
+  { id:'7',     label:'7',     desc:'Доминантовый 7',  intervals:[0,4,7,10] },
+  { id:'maj7',  label:'maj7',  desc:'Мажорный 7',      intervals:[0,4,7,11] },
+  { id:'m7',    label:'m7',    desc:'Минорный 7',      intervals:[0,3,7,10] },
+  { id:'5',     label:'5',     desc:'Пауэр (квинта)',  intervals:[0,7,12] },
+  { id:'sus2',  label:'sus2',  desc:'Суспенция 2',     intervals:[0,2,7] },
+  { id:'sus4',  label:'sus4',  desc:'Суспенция 4',     intervals:[0,5,7] },
+  { id:'add9',  label:'add9',  desc:'Добавленная 9',   intervals:[0,4,7,14] },
+  { id:'madd9', label:'madd9', desc:'Минор add9',      intervals:[0,3,7,14] },
+  { id:'dim',   label:'dim',   desc:'Уменьшенный',     intervals:[0,3,6] },
+  { id:'dim7',  label:'dim7',  desc:'Уменьш. 7',       intervals:[0,3,6,9] },
+  { id:'aug',   label:'aug',   desc:'Увеличенный',     intervals:[0,4,8] },
+  { id:'6',     label:'6',     desc:'Секстаккорд',     intervals:[0,4,7,9] },
+  { id:'m6',    label:'m6',    desc:'Минорный 6',      intervals:[0,3,7,9] },
+  { id:'9',     label:'9',     desc:'Нонаккорд',       intervals:[0,4,7,10,14] },
+];
+
+// Chord voicings: root=note name, type=chord type id
+// Each voicing: array of 6 strings (low E to high e)
+// Value: -1=mute, 0=open, N=fret number
+// VOICINGS: key="Note-type", value=array of {frets:[lowE..highE], desc}
+// frets: -1=mute, 0=open, N=fret. Generated and verified programmatically.
+const VOICINGS = {
+  'A#-5': [{frets:[6,8,8,-1,-1,-1],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,3,-1,-1],desc:'Barre 1 (A-shape)'}],
+  'A#-6': [{frets:[6,8,8,7,8,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,3,3,3],desc:'Barre 1 (A-shape)'}],
+  'A#-7': [{frets:[6,8,6,7,6,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,1,3,1],desc:'Barre 1 (A-shape)'}],
+  'A#-m': [{frets:[6,8,8,6,6,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,3,2,1],desc:'Barre 1 (A-shape)'}],
+  'A#-m6': [{frets:[6,8,8,6,8,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,3,2,3],desc:'Barre 1 (A-shape)'}],
+  'A#-m7': [{frets:[6,8,6,6,6,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,1,2,1],desc:'Barre 1 (A-shape)'}],
+  'A#-maj': [{frets:[6,8,8,7,6,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,3,3,1],desc:'Barre 1 (A-shape)'}],
+  'A#-maj7': [{frets:[6,8,7,7,6,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,2,3,1],desc:'Barre 1 (A-shape)'}],
+  'A#-sus2': [{frets:[-1,1,3,3,1,1],desc:'Barre 1 (A-shape)'}],
+  'A#-sus4': [{frets:[6,8,8,8,6,6],desc:'Barre 6 (E-shape)'}, {frets:[-1,1,3,3,4,1],desc:'Barre 1 (A-shape)'}],
+  'A-5': [{frets:[5,7,7,-1,-1,-1],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,14,-1,-1],desc:'Barre 12 (A-shape)'}],
+  'A-6': [{frets:[5,7,7,6,7,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,14,14,14],desc:'Barre 12 (A-shape)'}],
+  'A-7': [{frets:[-1,0,2,0,2,0],desc:'Open'}, {frets:[5,7,5,6,5,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,12,14,12],desc:'Barre 12 (A-shape)'}],
+  'A-m': [{frets:[-1,0,2,2,1,0],desc:'Open'}, {frets:[5,7,7,5,5,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,14,13,12],desc:'Barre 12 (A-shape)'}],
+  'A-m6': [{frets:[5,7,7,5,7,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,14,13,14],desc:'Barre 12 (A-shape)'}],
+  'A-m7': [{frets:[-1,0,2,0,1,0],desc:'Open'}, {frets:[5,7,5,5,5,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,12,13,12],desc:'Barre 12 (A-shape)'}],
+  'A-maj': [{frets:[-1,0,2,2,2,0],desc:'Open'}, {frets:[5,7,7,6,5,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,14,14,12],desc:'Barre 12 (A-shape)'}],
+  'A-maj7': [{frets:[-1,0,2,1,2,0],desc:'Open'}, {frets:[5,7,6,6,5,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,13,14,12],desc:'Barre 12 (A-shape)'}],
+  'A-sus2': [{frets:[-1,0,2,2,0,0],desc:'Open'}, {frets:[-1,12,14,14,12,12],desc:'Barre 12 (A-shape)'}],
+  'A-sus4': [{frets:[-1,0,2,2,3,0],desc:'Open'}, {frets:[5,7,7,7,5,5],desc:'Barre 5 (E-shape)'}, {frets:[-1,12,14,14,15,12],desc:'Barre 12 (A-shape)'}],
+  'B-5': [{frets:[7,9,9,-1,-1,-1],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,4,-1,-1],desc:'Barre 2 (A-shape)'}],
+  'B-6': [{frets:[7,9,9,8,9,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,4,4,4],desc:'Barre 2 (A-shape)'}],
+  'B-7': [{frets:[-1,2,1,2,0,2],desc:'Open'}, {frets:[7,9,7,8,7,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,2,4,2],desc:'Barre 2 (A-shape)'}],
+  'B-m': [{frets:[7,9,9,7,7,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,4,3,2],desc:'Barre 2 (A-shape)'}],
+  'B-m6': [{frets:[7,9,9,7,9,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,4,3,4],desc:'Barre 2 (A-shape)'}],
+  'B-m7': [{frets:[7,9,7,7,7,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,2,3,2],desc:'Barre 2 (A-shape)'}],
+  'B-maj': [{frets:[7,9,9,8,7,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,4,4,2],desc:'Barre 2 (A-shape)'}],
+  'B-maj7': [{frets:[7,9,8,8,7,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,3,4,2],desc:'Barre 2 (A-shape)'}],
+  'B-sus2': [{frets:[-1,2,4,4,2,2],desc:'Barre 2 (A-shape)'}],
+  'B-sus4': [{frets:[7,9,9,9,7,7],desc:'Barre 7 (E-shape)'}, {frets:[-1,2,4,4,5,2],desc:'Barre 2 (A-shape)'}],
+  'C#-5': [{frets:[9,11,11,-1,-1,-1],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,6,-1,-1],desc:'Barre 4 (A-shape)'}],
+  'C#-6': [{frets:[9,11,11,10,11,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,6,6,6],desc:'Barre 4 (A-shape)'}],
+  'C#-7': [{frets:[9,11,9,10,9,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,4,6,4],desc:'Barre 4 (A-shape)'}],
+  'C#-m': [{frets:[9,11,11,9,9,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,6,5,4],desc:'Barre 4 (A-shape)'}],
+  'C#-m6': [{frets:[9,11,11,9,11,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,6,5,6],desc:'Barre 4 (A-shape)'}],
+  'C#-m7': [{frets:[9,11,9,9,9,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,4,5,4],desc:'Barre 4 (A-shape)'}],
+  'C#-maj': [{frets:[9,11,11,10,9,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,6,6,4],desc:'Barre 4 (A-shape)'}],
+  'C#-maj7': [{frets:[9,11,10,10,9,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,5,6,4],desc:'Barre 4 (A-shape)'}],
+  'C#-sus2': [{frets:[-1,4,6,6,4,4],desc:'Barre 4 (A-shape)'}],
+  'C#-sus4': [{frets:[9,11,11,11,9,9],desc:'Barre 9 (E-shape)'}, {frets:[-1,4,6,6,7,4],desc:'Barre 4 (A-shape)'}],
+  'C-5': [{frets:[8,10,10,-1,-1,-1],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,5,-1,-1],desc:'Barre 3 (A-shape)'}],
+  'C-6': [{frets:[8,10,10,9,10,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,5,5,5],desc:'Barre 3 (A-shape)'}],
+  'C-7': [{frets:[-1,3,2,3,1,0],desc:'Open'}, {frets:[8,10,8,9,8,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,3,5,3],desc:'Barre 3 (A-shape)'}],
+  'C-m': [{frets:[8,10,10,8,8,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,5,4,3],desc:'Barre 3 (A-shape)'}],
+  'C-m6': [{frets:[8,10,10,8,10,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,5,4,5],desc:'Barre 3 (A-shape)'}],
+  'C-m7': [{frets:[8,10,8,8,8,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,3,4,3],desc:'Barre 3 (A-shape)'}],
+  'C-maj': [{frets:[-1,3,2,0,1,0],desc:'Open'}, {frets:[8,10,10,9,8,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,5,5,3],desc:'Barre 3 (A-shape)'}],
+  'C-maj7': [{frets:[-1,3,2,0,0,0],desc:'Open'}, {frets:[8,10,9,9,8,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,4,5,3],desc:'Barre 3 (A-shape)'}],
+  'C-sus2': [{frets:[-1,3,5,5,3,3],desc:'Barre 3 (A-shape)'}],
+  'C-sus4': [{frets:[8,10,10,10,8,8],desc:'Barre 8 (E-shape)'}, {frets:[-1,3,5,5,6,3],desc:'Barre 3 (A-shape)'}],
+  'D#-5': [{frets:[11,13,13,-1,-1,-1],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,8,-1,-1],desc:'Barre 6 (A-shape)'}],
+  'D#-6': [{frets:[11,13,13,12,13,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,8,8,8],desc:'Barre 6 (A-shape)'}],
+  'D#-7': [{frets:[11,13,11,12,11,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,6,8,6],desc:'Barre 6 (A-shape)'}],
+  'D#-m': [{frets:[11,13,13,11,11,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,8,7,6],desc:'Barre 6 (A-shape)'}],
+  'D#-m6': [{frets:[11,13,13,11,13,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,8,7,8],desc:'Barre 6 (A-shape)'}],
+  'D#-m7': [{frets:[11,13,11,11,11,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,6,7,6],desc:'Barre 6 (A-shape)'}],
+  'D#-maj': [{frets:[11,13,13,12,11,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,8,8,6],desc:'Barre 6 (A-shape)'}],
+  'D#-maj7': [{frets:[11,13,12,12,11,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,7,8,6],desc:'Barre 6 (A-shape)'}],
+  'D#-sus2': [{frets:[-1,6,8,8,6,6],desc:'Barre 6 (A-shape)'}],
+  'D#-sus4': [{frets:[11,13,13,13,11,11],desc:'Barre 11 (E-shape)'}, {frets:[-1,6,8,8,9,6],desc:'Barre 6 (A-shape)'}],
+  'D-5': [{frets:[10,12,12,-1,-1,-1],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,7,-1,-1],desc:'Barre 5 (A-shape)'}],
+  'D-6': [{frets:[10,12,12,11,12,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,7,7,7],desc:'Barre 5 (A-shape)'}],
+  'D-7': [{frets:[-1,-1,0,2,1,2],desc:'Open'}, {frets:[10,12,10,11,10,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,5,7,5],desc:'Barre 5 (A-shape)'}],
+  'D-m': [{frets:[-1,-1,0,2,3,1],desc:'Open'}, {frets:[10,12,12,10,10,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,7,6,5],desc:'Barre 5 (A-shape)'}],
+  'D-m6': [{frets:[10,12,12,10,12,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,7,6,7],desc:'Barre 5 (A-shape)'}],
+  'D-m7': [{frets:[-1,-1,0,2,1,1],desc:'Open'}, {frets:[10,12,10,10,10,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,5,6,5],desc:'Barre 5 (A-shape)'}],
+  'D-maj': [{frets:[-1,-1,0,2,3,2],desc:'Open'}, {frets:[10,12,12,11,10,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,7,7,5],desc:'Barre 5 (A-shape)'}],
+  'D-maj7': [{frets:[-1,-1,0,2,2,2],desc:'Open'}, {frets:[10,12,11,11,10,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,6,7,5],desc:'Barre 5 (A-shape)'}],
+  'D-sus2': [{frets:[-1,-1,0,2,3,0],desc:'Open'}, {frets:[-1,5,7,7,5,5],desc:'Barre 5 (A-shape)'}],
+  'D-sus4': [{frets:[-1,-1,0,2,3,3],desc:'Open'}, {frets:[10,12,12,12,10,10],desc:'Barre 10 (E-shape)'}, {frets:[-1,5,7,7,8,5],desc:'Barre 5 (A-shape)'}],
+  'E-5': [{frets:[12,14,14,-1,-1,-1],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,9,-1,-1],desc:'Barre 7 (A-shape)'}],
+  'E-6': [{frets:[12,14,14,13,14,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,9,9,9],desc:'Barre 7 (A-shape)'}],
+  'E-7': [{frets:[0,2,0,1,0,0],desc:'Open'}, {frets:[12,14,12,13,12,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,7,9,7],desc:'Barre 7 (A-shape)'}],
+  'E-m': [{frets:[0,2,2,0,0,0],desc:'Open'}, {frets:[12,14,14,12,12,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,9,8,7],desc:'Barre 7 (A-shape)'}],
+  'E-m6': [{frets:[12,14,14,12,14,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,9,8,9],desc:'Barre 7 (A-shape)'}],
+  'E-m7': [{frets:[0,2,0,0,0,0],desc:'Open'}, {frets:[12,14,12,12,12,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,7,8,7],desc:'Barre 7 (A-shape)'}],
+  'E-maj': [{frets:[0,2,2,1,0,0],desc:'Open'}, {frets:[12,14,14,13,12,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,9,9,7],desc:'Barre 7 (A-shape)'}],
+  'E-maj7': [{frets:[0,2,1,1,0,0],desc:'Open'}, {frets:[12,14,13,13,12,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,8,9,7],desc:'Barre 7 (A-shape)'}],
+  'E-sus2': [{frets:[-1,7,9,9,7,7],desc:'Barre 7 (A-shape)'}],
+  'E-sus4': [{frets:[0,2,2,2,0,0],desc:'Open'}, {frets:[12,14,14,14,12,12],desc:'Barre 12 (E-shape)'}, {frets:[-1,7,9,9,10,7],desc:'Barre 7 (A-shape)'}],
+  'F#-5': [{frets:[2,4,4,-1,-1,-1],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,11,-1,-1],desc:'Barre 9 (A-shape)'}],
+  'F#-6': [{frets:[2,4,4,3,4,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,11,11,11],desc:'Barre 9 (A-shape)'}],
+  'F#-7': [{frets:[2,4,2,3,2,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,9,11,9],desc:'Barre 9 (A-shape)'}],
+  'F#-m': [{frets:[2,4,4,2,2,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,11,10,9],desc:'Barre 9 (A-shape)'}],
+  'F#-m6': [{frets:[2,4,4,2,4,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,11,10,11],desc:'Barre 9 (A-shape)'}],
+  'F#-m7': [{frets:[2,4,2,2,2,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,9,10,9],desc:'Barre 9 (A-shape)'}],
+  'F#-maj': [{frets:[2,4,4,3,2,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,11,11,9],desc:'Barre 9 (A-shape)'}],
+  'F#-maj7': [{frets:[2,4,3,3,2,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,10,11,9],desc:'Barre 9 (A-shape)'}],
+  'F#-sus2': [{frets:[-1,9,11,11,9,9],desc:'Barre 9 (A-shape)'}],
+  'F#-sus4': [{frets:[2,4,4,4,2,2],desc:'Barre 2 (E-shape)'}, {frets:[-1,9,11,11,12,9],desc:'Barre 9 (A-shape)'}],
+  'F-5': [{frets:[1,3,3,-1,-1,-1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,10,-1,-1],desc:'Barre 8 (A-shape)'}],
+  'F-6': [{frets:[1,3,3,2,3,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,10,10,10],desc:'Barre 8 (A-shape)'}],
+  'F-7': [{frets:[1,3,1,2,1,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,8,10,8],desc:'Barre 8 (A-shape)'}],
+  'F-m': [{frets:[1,3,3,1,1,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,10,9,8],desc:'Barre 8 (A-shape)'}],
+  'F-m6': [{frets:[1,3,3,1,3,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,10,9,10],desc:'Barre 8 (A-shape)'}],
+  'F-m7': [{frets:[1,3,1,1,1,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,8,9,8],desc:'Barre 8 (A-shape)'}],
+  'F-maj': [{frets:[1,3,3,2,1,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,10,10,8],desc:'Barre 8 (A-shape)'}],
+  'F-maj7': [{frets:[-1,-1,3,2,1,0],desc:'Open'}, {frets:[1,3,2,2,1,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,9,10,8],desc:'Barre 8 (A-shape)'}],
+  'F-sus2': [{frets:[-1,8,10,10,8,8],desc:'Barre 8 (A-shape)'}],
+  'F-sus4': [{frets:[1,3,3,3,1,1],desc:'Barre 1 (E-shape)'}, {frets:[-1,8,10,10,11,8],desc:'Barre 8 (A-shape)'}],
+  'G#-5': [{frets:[4,6,6,-1,-1,-1],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,13,-1,-1],desc:'Barre 11 (A-shape)'}],
+  'G#-6': [{frets:[4,6,6,5,6,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,13,13,13],desc:'Barre 11 (A-shape)'}],
+  'G#-7': [{frets:[4,6,4,5,4,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,11,13,11],desc:'Barre 11 (A-shape)'}],
+  'G#-m': [{frets:[4,6,6,4,4,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,13,12,11],desc:'Barre 11 (A-shape)'}],
+  'G#-m6': [{frets:[4,6,6,4,6,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,13,12,13],desc:'Barre 11 (A-shape)'}],
+  'G#-m7': [{frets:[4,6,4,4,4,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,11,12,11],desc:'Barre 11 (A-shape)'}],
+  'G#-maj': [{frets:[4,6,6,5,4,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,13,13,11],desc:'Barre 11 (A-shape)'}],
+  'G#-maj7': [{frets:[4,6,5,5,4,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,12,13,11],desc:'Barre 11 (A-shape)'}],
+  'G#-sus2': [{frets:[-1,11,13,13,11,11],desc:'Barre 11 (A-shape)'}],
+  'G#-sus4': [{frets:[4,6,6,6,4,4],desc:'Barre 4 (E-shape)'}, {frets:[-1,11,13,13,14,11],desc:'Barre 11 (A-shape)'}],
+  'G-5': [{frets:[3,5,5,-1,-1,-1],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,12,-1,-1],desc:'Barre 10 (A-shape)'}],
+  'G-6': [{frets:[3,5,5,4,5,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,12,12,12],desc:'Barre 10 (A-shape)'}],
+  'G-7': [{frets:[3,2,0,0,0,1],desc:'Open'}, {frets:[3,5,3,4,3,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,10,12,10],desc:'Barre 10 (A-shape)'}],
+  'G-m': [{frets:[3,5,5,3,3,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,12,11,10],desc:'Barre 10 (A-shape)'}],
+  'G-m6': [{frets:[3,5,5,3,5,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,12,11,12],desc:'Barre 10 (A-shape)'}],
+  'G-m7': [{frets:[3,5,3,3,3,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,10,11,10],desc:'Barre 10 (A-shape)'}],
+  'G-maj': [{frets:[3,2,0,0,0,3],desc:'Open'}, {frets:[3,5,5,4,3,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,12,12,10],desc:'Barre 10 (A-shape)'}],
+  'G-maj7': [{frets:[3,2,0,0,0,2],desc:'Open'}, {frets:[3,5,4,4,3,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,11,12,10],desc:'Barre 10 (A-shape)'}],
+  'G-sus2': [{frets:[-1,10,12,12,10,10],desc:'Barre 10 (A-shape)'}],
+  'G-sus4': [{frets:[3,5,5,5,3,3],desc:'Barre 3 (E-shape)'}, {frets:[-1,10,12,12,13,10],desc:'Barre 10 (A-shape)'}],
+};
+
+let chordRoot = 'A';
+let chordType = 'maj';
+
+// ═══ VOICING GENERATOR ════════════════════════════
+// Подвижные барре-формы для типов, которых нет в VOICINGS.
+// Каждая форма — функция от лада тоники на опорной струне; проверены программно.
+function generateVoicings(root, type) {
+  let pc = CHROMATIC.indexOf(root);
+  if (pc < 0) {
+    const flat2sharp = {'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'};
+    pc = CHROMATIC.indexOf(flat2sharp[root] || '');
+  }
+  if (pc < 0) return null;
+
+  const out = [];
+  const eRoot = (pc - 4 + 12) % 12;  // лад тоники на 6-й струне (E)
+  const aRoot = (pc - 9 + 12) % 12;  // на 5-й (A)
+  const dRoot = (pc - 2 + 12) % 12;  // на 4-й (D)
+
+  if (type === 'add9') {
+    const a = eRoot;
+    out.push({frets:[a, a+2, a+2, a+1, a, a+2], desc: a===0 ? 'Open (E-shape)' : `Barre ${a} (E-shape)`});
+  } else if (type === 'madd9') {
+    const a = eRoot;
+    out.push({frets:[a, a+2, a+2, a, a, a+2], desc: a===0 ? 'Open (E-shape)' : `Barre ${a} (E-shape)`});
+  } else if (type === '9') {
+    let a = aRoot; if (a < 1) a += 12;
+    out.push({frets:[-1, a, a-1, a, a, a], desc:`Позиция ${a} (A-shape)`});
+  } else if (type === 'dim') {
+    const a = aRoot;
+    out.push({frets:[-1, a, a+1, a+2, a+1, -1], desc: a===0 ? 'Open (A-shape)' : `Позиция ${a} (A-shape)`});
+  } else if (type === 'aug') {
+    let a = aRoot; if (a < 2) a += 4; // aug симметричен через 4 лада — сдвиг даёт тот же аккорд
+    out.push({frets:[-1, a, a-1, a-2, a-2, -1], desc:`Позиция ${a} (A-shape)`});
+  } else if (type === 'dim7') {
+    const d = dRoot;
+    out.push({frets:[-1, -1, d, d+1, d, d+1], desc: d===0 ? 'Open (D-shape)' : `Позиция ${d} (D-shape)`});
+    // dim7 симметричен через 3 лада — вторая позиция, тот же аккорд
+    out.push({frets:[-1, -1, d+3, d+4, d+3, d+4], desc:`Позиция ${d+3} (D-shape)`});
+  }
+  return out.length ? out : null;
+}
+
+function getNoteIntervalName(semitones) {
+  const names = {0:'1',2:'2',3:'b3',4:'3',5:'4',6:'b5',7:'5',8:'b6/aug5',9:'6/bb7',10:'b7',11:'7',12:'8',14:'9'};
+  return names[semitones] || semitones;
+}
+
+function renderChordRootGrid() {
+  const el = document.getElementById('chordRootGrid');
+  el.innerHTML = '';
+  CHROMATIC.forEach(n => {
+    const b = document.createElement('button');
+    b.className = 'cr-btn' + (n === chordRoot ? ' active' : '');
+    b.textContent = n;
+    b.onclick = () => { chordRoot = n; renderChordExplorer(); };
+    el.appendChild(b);
+  });
+}
+
+function renderChordTypeGrid() {
+  const el = document.getElementById('chordTypeGrid');
+  el.innerHTML = '';
+  CHORD_TYPES.forEach(ct => {
+    const b = document.createElement('button');
+    b.className = 'ct-btn' + (ct.id === chordType ? ' active' : '');
+    b.textContent = ct.label;
+    b.title = ct.desc;
+    b.onclick = () => { chordType = ct.id; renderChordExplorer(); };
+    el.appendChild(b);
+  });
+}
+
+function buildMiniChordFretboard(voicingFrets, rootNote) {
+  const displayStrings = ['e','B','G','D','A','E'];
+  const displayMidi    = [5,4,3,2,1,0];
+
+  const frettedNotes = voicingFrets.filter(f => f > 0);
+  const minFret = frettedNotes.length ? Math.min(...frettedNotes) : 1;
+  const startFret = Math.max(1, minFret);
+  const endFret   = startFret + 3;
+
+  const wrap = document.createElement('div');
+
+  // Fret number row
+  const fnRow = document.createElement('div');
+  fnRow.style.cssText = 'display:flex;margin-left:30px;margin-bottom:2px;';
+  const nutSp = document.createElement('div');
+  nutSp.style.cssText = 'width:6px;flex-shrink:0;';
+  fnRow.appendChild(nutSp);
+  for (let f = startFret; f <= endFret; f++) {
+    const fc = document.createElement('div');
+    fc.className = 'mini-fnum';
+    fc.textContent = f;
+    fnRow.appendChild(fc);
+  }
+  wrap.appendChild(fnRow);
+
+  const fb = document.createElement('div');
+  fb.className = 'mini-fb';
+
+  displayStrings.forEach((sName, di) => {
+    const mi   = displayMidi[di];
+    const fret = voicingFrets[mi];
+
+    const row = document.createElement('div');
+    row.className = `mini-fb-row ms${di}`;
+
+    const lbl = document.createElement('div');
+    lbl.className = 'mini-lbl';
+    lbl.textContent = sName;
+    row.appendChild(lbl);
+
+    const ind = document.createElement('div');
+    if (fret === -1) {
+      ind.className = 'mini-mute'; ind.textContent = '✕';
+    } else if (fret === 0) {
+      ind.className = 'mini-open'; ind.textContent = '○';
+    } else {
+      ind.style.cssText = 'width:12px;flex-shrink:0;';
+    }
+    row.appendChild(ind);
+
+    const nut = document.createElement('div');
+    nut.className = 'mini-nut';
+    if (fret === -1 || fret === 0) nut.style.background = 'transparent';
+    row.appendChild(nut);
+
+    for (let f = startFret; f <= endFret; f++) {
+      const cell = document.createElement('div');
+      cell.className = 'mini-cell';
+      if (fret === f) {
+        const midiVal = OPEN_MIDI[mi] + f;
+        const note    = CHROMATIC[midiVal % 12];
+        const isRoot  = note === rootNote;
+        const dot = document.createElement('div');
+        dot.className = 'mini-dot ' + (isRoot ? 'root' : 'reg');
+        dot.textContent = note;
+        cell.appendChild(dot);
+      }
+      row.appendChild(cell);
+    }
+    fb.appendChild(row);
+  });
+
+  wrap.appendChild(fb);
+  return wrap;
+}
+
+function renderChordExplorer() {
+  renderChordRootGrid();
+  renderChordTypeGrid();
+
+  const cards = document.getElementById('chordCards');
+  cards.innerHTML = '';
+
+  const ct = CHORD_TYPES.find(t => t.id === chordType);
+  if (!ct) return;
+
+  const rootIdx = CHROMATIC.indexOf(chordRoot);
+  const chordNoteNames = ct.intervals.map(i => CHROMATIC[(rootIdx + i) % 12]);
+  const chordName = chordRoot + (chordType === 'maj' ? '' : chordType);
+
+  // Find voicings — try current root, then enharmonic, then generator
+  const aliases = {'C#':'Db','D#':'Eb','F#':'Gb','G#':'Ab','A#':'Bb',
+                   'Db':'C#','Eb':'D#','Gb':'F#','Ab':'G#','Bb':'A#'};
+  let vKey = `${chordRoot}-${chordType}`;
+  let positions = VOICINGS[vKey];
+  if (!positions && aliases[chordRoot]) {
+    vKey = `${aliases[chordRoot]}-${chordType}`;
+    positions = VOICINGS[vKey];
+  }
+  if (!positions) positions = generateVoicings(chordRoot, chordType);
+
+  // Header card
+  const header = document.createElement('div');
+  header.style.cssText = 'padding:14px;background:var(--panel);border:1px solid #2a2830;border-radius:4px;margin-bottom:4px;';
+
+  const nameRow = document.createElement('div');
+  nameRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+
+  const nameEl = document.createElement('div');
+  nameEl.style.cssText = 'font-size:24px;font-weight:700;color:var(--accent);';
+  nameEl.textContent = chordName;
+
+  const descEl = document.createElement('div');
+  descEl.style.cssText = 'font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;';
+  descEl.textContent = ct.desc;
+
+  // Play button
+  const playBtn = document.createElement('button');
+  playBtn.className = 'chord-play-btn';
+  playBtn.textContent = '▶';
+  playBtn.onclick = () => {
+    const baseMidi = 48 + rootIdx;
+    const stops = ct.intervals.map(i => startNote(baseMidi + i));
+    setTimeout(() => stops.forEach(s => s()), 1500);
+  };
+
+  nameRow.appendChild(nameEl);
+  nameRow.appendChild(playBtn);
+  header.appendChild(nameRow);
+
+  const notesEl = document.createElement('div');
+  notesEl.style.cssText = 'font-size:11px;color:var(--muted);margin-bottom:4px;';
+  notesEl.innerHTML = `Ноты: <span style="color:var(--accent2);font-weight:600;">${chordNoteNames.join(' · ')}</span>`;
+  header.appendChild(notesEl);
+
+  const intEl = document.createElement('div');
+  intEl.style.cssText = 'font-size:10px;color:var(--muted);';
+  intEl.textContent = 'Интервалы: ' + ct.intervals.map(getNoteIntervalName).join(' – ');
+  header.appendChild(intEl);
+
+  cards.appendChild(header);
+
+  // Voicing cards
+  if (positions && positions.length) {
+    const posTitle = document.createElement('div');
+    posTitle.style.cssText = 'font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin:12px 0 8px;';
+    posTitle.textContent = `Позиции на грифе (${positions.length})`;
+    cards.appendChild(posTitle);
+
+    positions.forEach((pos, idx) => {
+      const card = document.createElement('div');
+      card.className = 'chord-card';
+      card.style.flexDirection = 'column';
+
+      const posHeader = document.createElement('div');
+      posHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+
+      const posLabel = document.createElement('div');
+      posLabel.style.cssText = 'font-size:11px;color:var(--accent2);font-weight:600;';
+      posLabel.textContent = `${idx+1}. ${pos.desc}`;
+
+      // Position play button
+      const posPlay = document.createElement('button');
+      posPlay.style.cssText = 'background:var(--accent2);border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;';
+      posPlay.textContent = '▶';
+      posPlay.onclick = () => {
+        // Play notes from this specific voicing position
+        const stops = pos.frets.map((f, mi) => {
+          if (f === -1) return null;
+          return startNote(OPEN_MIDI[mi] + f);
+        }).filter(Boolean);
+        setTimeout(() => stops.forEach(s => s()), 1500);
+      };
+
+      posHeader.appendChild(posLabel);
+      posHeader.appendChild(posPlay);
+      card.appendChild(posHeader);
+
+      // Fret notation string
+      const fretStr = pos.frets.map(f => f === -1 ? 'x' : f).join('-');
+      const fretEl = document.createElement('div');
+      fretEl.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:8px;font-family:monospace;letter-spacing:2px;';
+      fretEl.textContent = fretStr;
+      card.appendChild(fretEl);
+
+      card.appendChild(buildMiniChordFretboard(pos.frets, chordRoot));
+      cards.appendChild(card);
+    });
+  } else {
+    const noVoice = document.createElement('div');
+    noVoice.style.cssText = 'padding:16px;background:var(--panel);border:1px solid #2a2830;border-radius:4px;font-size:11px;color:var(--muted);text-align:center;';
+    noVoice.textContent = 'Аппликатуры для этого аккорда скоро появятся';
+    cards.appendChild(noVoice);
+  }
+}
+
+function render() {
+  stopAllNotes();
+  saveState();
+  renderKeyGrid();
+  renderBoxSel();
+  renderInfo();
+  renderScaleSel();
+  renderScaleInfo();
+  renderFretboard();
+  renderGenreFilter();
+  renderProgressions();
+}
+
+loadState();
+render();
+syncNoteLabelButtons();
+if (activeTab === 'chords') switchTab('chords');
+const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol;
+
+// Гасим звук при сворачивании вкладки/приложения
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopAllNotes(); });
+window.addEventListener('pagehide', stopAllNotes);
+
+// ═══ PWA ══════════════════════════════════════════
+// SW регистрируется только при наличии реального файла sw.js на том же https-origin.
+// blob-SW браузеры не разрешают, поэтому офлайн-кэш работает только при хостинге с sw.js.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// beforeinstallprompt может выстрелить раньше load — слушаем сразу
+let deferredPrompt = null;
+function showInstallBanner() {
+  const b = document.getElementById('installBanner');
+  if (b) b.style.display = 'flex';
+}
+function hideInstallBanner() {
+  const b = document.getElementById('installBanner');
+  if (b) b.style.display = 'none';
+}
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallBanner();
+});
+window.addEventListener('appinstalled', hideInstallBanner);
+window.addEventListener('load', () => {
+  if (deferredPrompt) showInstallBanner();
+  document.getElementById('installBtn').onclick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    hideInstallBanner();
+  };
+  document.getElementById('dismissBtn').onclick = hideInstallBanner;
+});
+</script>
+
+<div id="installBanner">
+  <div class="ib-text">
+    <b>🎸 Pentatonic Trainer</b>
+    Добавить на экран как приложение
+  </div>
+  <button id="installBtn">Установить</button>
+  <button id="dismissBtn">✕</button>
+</div>
+
+</body>
+</html>
