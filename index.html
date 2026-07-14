@@ -618,8 +618,8 @@ function getMaster() {
     comp.threshold.value = -8; comp.knee.value = 12;
     comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.08;
     const g = ctx.createGain(); g.gain.value = 0.7;
-    masterOutNode = ctx.createGain(); masterOutNode.gain.value = masterVol; // громкость ПОСЛЕ компрессора
-    g.connect(comp); comp.connect(masterOutNode); masterOutNode.connect(ctx.destination);
+    masterOutNode = ctx.createGain(); masterOutNode.gain.value = masterVol; // громкость ДО компрессора: пики на максимуме прижимает лимитер, клиппинга нет
+    g.connect(masterOutNode); masterOutNode.connect(comp); comp.connect(ctx.destination);
     master = g;
   }
   return master;
@@ -1296,6 +1296,15 @@ function playStrumStroke(notes, when, step, noteDur) {
   });
 }
 
+// Октава корня ступени: тоника в C3–B3, остальные ступени в пределах ±полоктавы от неё —
+// как открытые аккорды у гитариста (в A: D чуть выше, E чуть ниже). Без регистровых скачков.
+function degreeRootMidi(ri, d) {
+  const tonicMidi = 48 + (ri % 12);
+  let off = ((d % 12) + 12) % 12;
+  if (off > 6) off -= 12;
+  return tonicMidi + off;
+}
+
 function chordNotes(rootMidi, q) {
   const isMinor = ['i','iv','vi','i7','iv7','vi7'].includes(q);
   const third = isMinor ? 3 : 4;
@@ -1344,7 +1353,7 @@ function scheduleBar(barIdx, barStart) {
   const barLen = beat * 4;
   const stepLen = barLen / r.grid;
   const ch    = player.rhythmOnly ? player.prog.degrees[0] : player.prog.degrees[barIdx % player.prog.degrees.length];
-  const rootMidi = 48 + ((player.ri + ch.d) % 12);
+  const rootMidi = degreeRootMidi(player.ri, ch.d);
   const notes = chordNotes(rootMidi, ch.q);
   const pairSpan = stepLen * 2;
 
@@ -1729,7 +1738,7 @@ function renderProgressions() {
     chordsEl.className = 'prog-chords';
 
     prog.degrees.forEach((ch, ci) => {
-      const rootMidi = 48 + ((ri + ch.d) % 12);
+      const rootMidi = degreeRootMidi(ri, ch.d);
       const label = chordLabel(ch, ri);
 
       if (ci > 0) {
