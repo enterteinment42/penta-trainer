@@ -864,6 +864,7 @@ function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
+      rhythmOnlyOn, countInOn,
     }));
   } catch(e) {}
 }
@@ -880,6 +881,8 @@ function loadState() {
     if (st.jamPrefs && typeof st.jamPrefs === 'object') jamPrefs = st.jamPrefs;
     if (['penta','chords'].includes(st.activeTab)) activeTab = st.activeTab;
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
+    if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
+    if (typeof st.countInOn === 'boolean') countInOn = st.countInOn;
     if (typeof st.masterVol === 'number' && st.masterVol >= 0 && st.masterVol <= 1.5) masterVol = st.masterVol;
   } catch(e) {}
 }
@@ -1348,10 +1351,11 @@ const player = {
   running:false, prog:null, ri:0, rhythm:null, bpm:100,
   bar:0, nextBarTime:0, timer:null, raf:null, lastBar:-1,
   cardEl:null, events:[],   // events: {time, stepIdx} для подсветки
-  metro:false, countIn:false, countEvents:[], // метроном и отсчёт «1-2-3-4»
+  metro:false, countEvents:[], // метроном и отсчёт «1-2-3-4»
 };
 let metroOn = false; // глобальная настройка: клик метронома во время игры
 let rhythmOnlyOn = false; // режим «только ритм»: луп на одной тонике (отработка боя)
+let countInOn = false; // отсчёт «1-2-3-4» перед стартом лупа — успеть взять гитару
 
 function stopPlayer() {
   if (player.timer) { clearInterval(player.timer); player.timer = null; }
@@ -1426,7 +1430,7 @@ function playerHighlight() {
   // Отсчёт «1-2-3-4» перед стартом — крупная цифра в карточке
   let countNum = 0;
   for (const e of player.countEvents) { if (e.time <= t + 0.02) countNum = e.n; }
-  const stillCounting = player.countEvents.length && t < player.nextBarTime - 0.02;
+  const stillCounting = player.countEvents.length && t < player.countEndTime - 0.02;
   if (player.cardEl) {
     let badge = player.cardEl.querySelector('.count-in');
     if (stillCounting && countNum > 0) {
@@ -1483,7 +1487,17 @@ function startPlayer(prog, ri, cardEl, rhythmIdx) {
   player.countEvents = [];
   player.running = true;
 
-  player.nextBarTime = ctx.currentTime + 0.12;  // старт сразу, без отсчёта
+  let startAt = ctx.currentTime + 0.12;
+  if (countInOn) { // отсчёт «1-2-3-4»: 4 клика метронома с акцентом на первом, луп стартует после них
+    const beat = 60 / player.bpm;
+    for (let n = 1; n <= 4; n++) {
+      metroClick(startAt + (n - 1) * beat, n === 1);
+      player.countEvents.push({ time: startAt + (n - 1) * beat, n });
+    }
+    startAt += 4 * beat;
+  }
+  player.countEndTime = startAt; // после этого момента бейдж отсчёта гаснет
+  player.nextBarTime = startAt;
 
   player.timer = setInterval(playerTick, 80);
   playerTick();
@@ -1746,8 +1760,20 @@ function renderProgressions() {
       rhythmOnlyOn = !rhythmOnlyOn;
       roBtn.classList.toggle('on', rhythmOnlyOn);
       if (player.running && player.cardEl === item) player.rhythmOnly = rhythmOnlyOn;
+      saveState();
     };
     optRow.appendChild(roBtn);
+    // отсчёт «1-2-3-4» перед стартом лупа
+    const ciBtn = document.createElement('button');
+    ciBtn.className = 'ro-btn' + (countInOn ? ' on' : '');
+    ciBtn.textContent = '⏱ Отсчёт';
+    ciBtn.title = 'Отсчёт «1-2-3-4» перед стартом — успеть взять гитару';
+    ciBtn.onclick = () => {
+      countInOn = !countInOn;
+      ciBtn.classList.toggle('on', countInOn);
+      saveState();
+    };
+    optRow.appendChild(ciBtn);
     rPanel.appendChild(optRow);
     item.appendChild(rPanel);
 
@@ -2271,8 +2297,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) stopA
 window.addEventListener('pagehide', stopAllNotes);
 
 // ═══ PWA ══════════════════════════════════════════
-// SW регистрируется только при наличии реального файла sw.js на том же https-origin.
-// blob-SW браузеры не разрешают, поэтому офлайн-кэш работает только при хостинге с sw.js.
+// sw.js лежит рядом в репозитории: network-first (всегда свежая версия с сети),
+// кэш — запасной вариант для офлайна.
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
