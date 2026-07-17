@@ -882,6 +882,82 @@ function metroClick(when, accent) {
   osc.start(when); osc.stop(when + 0.06);
 }
 
+// ── Ритм-секция (бас + барабаны), Web Audio без семплов ──
+// Регистрируем короткий источник в activeStops — чтобы «Стоп» глушил и барабаны/бас
+function regStop(node, when) {
+  const ctx = getCtx();
+  const stop = () => {
+    if (!activeStops.has(stop)) return;
+    activeStops.delete(stop);
+    try { node.stop(ctx.currentTime); } catch(e) {}
+  };
+  activeStops.add(stop);
+  setTimeout(() => { activeStops.delete(stop); }, Math.max(0, (when - ctx.currentTime) * 1000) + 400);
+}
+
+// Бочка: синус с быстрым питч-спадом 120→45 Гц + быстрый спад амплитуды
+function kick(when, vel = 1) {
+  const ctx = getCtx();
+  const dest = getMaster();
+  const osc = ctx.createOscillator();
+  const g   = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(120, when);
+  osc.frequency.exponentialRampToValueAtTime(45, when + 0.09);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(0.85 * vel, when + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.24);
+  osc.connect(g); g.connect(dest);
+  osc.start(when); osc.stop(when + 0.26);
+  regStop(osc, when);
+}
+
+// Снейр: полосовой шум + короткое тоновое «тело»
+function snare(when, vel = 1) {
+  const ctx = getCtx();
+  const dest = getMaster();
+  const len = Math.floor(ctx.sampleRate * 0.2);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * (1 - i/len);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.6;
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0.45 * vel, when);
+  ng.gain.exponentialRampToValueAtTime(0.0001, when + 0.16);
+  src.connect(bp); bp.connect(hp); hp.connect(ng); ng.connect(dest);
+  src.start(when); regStop(src, when);
+  const osc = ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 185;
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.0001, when);
+  og.gain.exponentialRampToValueAtTime(0.26 * vel, when + 0.004);
+  og.gain.exponentialRampToValueAtTime(0.0001, when + 0.09);
+  osc.connect(og); og.connect(dest);
+  osc.start(when); osc.stop(when + 0.1); regStop(osc, when);
+}
+
+// Бас: пила + суб-синус через лоупас, плаки-огибающая (атака → спад → релиз)
+function bassNote(midi, when, dur, vel = 1) {
+  const ctx = getCtx();
+  const dest = getMaster();
+  const freq = 440 * Math.pow(2, (midi - 69) / 12);
+  const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = freq;
+  const sub = ctx.createOscillator(); sub.type = 'sine';     sub.frequency.value = freq;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 750; lp.Q.value = 0.7;
+  const g = ctx.createGain();
+  const peak = 0.42 * vel;
+  const end = when + Math.max(0.12, dur);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(peak, when + 0.008);
+  g.gain.exponentialRampToValueAtTime(peak * 0.5, when + 0.12);
+  g.gain.exponentialRampToValueAtTime(0.0001, end);
+  osc.connect(lp); sub.connect(lp); lp.connect(g); g.connect(dest);
+  osc.start(when); sub.start(when);
+  osc.stop(end + 0.02); sub.stop(end + 0.02);
+  regStop(osc, when); regStop(sub, when);
+}
+
 // Одиночная нота на грифе (press-and-hold)
 function startNote(midi) {
   return makeVoice(midi, true);
@@ -904,7 +980,7 @@ function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
-      rhythmOnlyOn, countInOn, blueNoteOn,
+      rhythmOnlyOn, countInOn, blueNoteOn, bandOn,
     }));
   } catch(e) {}
 }
@@ -923,6 +999,7 @@ function loadState() {
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
     if (typeof st.countInOn === 'boolean') countInOn = st.countInOn;
+    if (typeof st.bandOn === 'boolean') bandOn = st.bandOn;
     if (typeof st.blueNoteOn === 'boolean') blueNoteOn = st.blueNoteOn;
     if (typeof st.masterVol === 'number' && st.masterVol >= 0 && st.masterVol <= 1.5) masterVol = st.masterVol;
   } catch(e) {}
@@ -1559,6 +1636,17 @@ const player = {
 let metroOn = false; // глобальная настройка: клик метронома во время игры
 let rhythmOnlyOn = false; // режим «только ритм»: луп на одной тонике (отработка боя)
 let countInOn = false; // отсчёт «1-2-3-4» перед стартом лупа — успеть взять гитару
+let bandOn = false; // ритм-секция: бас (тоника-квинта) + бочка/снейр под жанр
+
+// Рисунки ритм-секции по жанрам. Позиции — в долях такта (0..4).
+// bass: [доля, 'R'|'5'] — R=тоника, 5=квинта (тоника+7). Реггидж — one-drop + бас на офф-битах.
+const BAND = {
+  blues:  { kick:[0,2],        snare:[1,3], bass:[[0,'R'],[1,'5'],[2,'R'],[3,'5']] },
+  rock:   { kick:[0,2],        snare:[1,3], bass:[[0,'R'],[1,'5'],[2,'R'],[3,'5']] },
+  pop:    { kick:[0,2],        snare:[1,3], bass:[[0,'R'],[1,'5'],[2,'R'],[3,'5']] },
+  funk:   { kick:[0,0.75,2.5], snare:[1,3], bass:[[0,'R'],[0.75,'R'],[2,'5'],[2.5,'R'],[3,'5']] },
+  reggae: { kick:[2],          snare:[2],   bass:[[0.5,'R'],[2,'5'],[3.5,'R']] },
+};
 
 function stopPlayer() {
   if (player.timer) { clearInterval(player.timer); player.timer = null; }
@@ -1605,6 +1693,17 @@ function scheduleBar(barIdx, barStart) {
     playStrumStroke(notes, t, step, noteDur);
     player.events.push({ time: t, stepIdx: i, barIdx });
   });
+  // ритм-секция: бас (тоника-квинта) + бочка/снейр по жанру
+  if (player.band) {
+    const bd = BAND[player.prog.genre] || BAND.rock;
+    const bassRoot = rootMidi - 12; // бас-октава
+    const bassDur  = beat * (player.prog.genre === 'reggae' ? 0.4 : 0.85);
+    bd.kick.forEach(b  => kick(barStart  + b * beat, b === 0 ? 1 : 0.9));
+    bd.snare.forEach(b => snare(barStart + b * beat, 0.9));
+    bd.bass.forEach(([b, which]) => {
+      bassNote(which === '5' ? bassRoot + 7 : bassRoot, barStart + b * beat, bassDur, 0.9);
+    });
+  }
   // клик метронома на каждую из 4 долей (акцент на 1-ю)
   if (player.metro) {
     for (let b = 0; b < 4; b++) metroClick(barStart + b * beat, b === 0);
@@ -1687,6 +1786,7 @@ function startPlayer(prog, ri, cardEl, rhythmIdx) {
   player.events  = [];
   player.metro   = metroOn;
   player.rhythmOnly = rhythmOnlyOn;
+  player.band    = bandOn;
   player.countEvents = [];
   player.running = true;
 
@@ -1977,6 +2077,18 @@ function renderProgressions() {
       saveState();
     };
     optRow.appendChild(ciBtn);
+    // ритм-секция: бас + бочка/снейр — превращает луп в backing track
+    const bandBtn = document.createElement('button');
+    bandBtn.className = 'ro-btn' + (bandOn ? ' on' : '');
+    bandBtn.textContent = '🥁 Ритм-секция';
+    bandBtn.title = 'Бас (тоника-квинта) + бочка/снейр под жанр — полноценный backing track';
+    bandBtn.onclick = () => {
+      bandOn = !bandOn;
+      bandBtn.classList.toggle('on', bandOn);
+      if (player.running && player.cardEl === item) player.band = bandOn;
+      saveState();
+    };
+    optRow.appendChild(bandBtn);
     rPanel.appendChild(optRow);
     item.appendChild(rPanel);
 
