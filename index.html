@@ -808,9 +808,9 @@ function makeVoice(midi, sustain, opts = {}) {
     env.gain.linearRampToValueAtTime(peak, when + 0.004);            // быстрая атака
     env.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainLvl), when + 0.10); // спад на сустейн
     env.gain.exponentialRampToValueAtTime(0.0001, when + decayT);    // долгое затухание
-    osc.connect(env); sub.connect(subG); subG.connect(env);
-    if (opts.bright) { const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 2600; hs.gain.value = 6; env.connect(hs); hs.connect(bus); } // ап-штрих ярче
-    else env.connect(bus);
+    // Прим.: яркость ап-штриха (opts.bright) НЕ применяем в дисторшне — все голоса идут в общий
+    // перегруз-бус, буст верхов ДО вейвшейпера даёт физз/грязь. Разница ап/даун — по громкости.
+    osc.connect(env); sub.connect(subG); subG.connect(env); env.connect(bus);
     if (opts.bend) { // подтяжка/слайд — как в acoustic-ветке; detune в центах масштабируется на суб-октаву сам
       const bAt = when + (opts.bend.at || 0.08);
       [osc, sub].forEach(o => { o.detune.setValueAtTime(0, bAt); o.detune.linearRampToValueAtTime(opts.bend.cents, bAt + (opts.bend.dur || 0.15)); });
