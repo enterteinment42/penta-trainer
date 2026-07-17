@@ -769,9 +769,12 @@ function makeVoice(midi, sustain, opts = {}) {
     const src  = ctx.createBufferSource();
     src.buffer = ksBufferCached(ctx, freq, Math.max(0.3, dur), 0.996);
     const lp   = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 4500;
+    lp.type = 'lowpass'; lp.frequency.value = opts.bright ? 6500 : 4500; // ап-штрих ярче
     const g = ctx.createGain(); g.gain.value = 0.55 * vel;
-    src.connect(lp); lp.connect(g); g.connect(dest);
+    src.connect(lp);
+    let aOut = lp;
+    if (opts.bright) { const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 2200; hs.gain.value = 5; lp.connect(hs); aOut = hs; }
+    aOut.connect(g); g.connect(dest);
     if (opts.bend) { // подтяжка/слайд: плавный подъём высоты после атаки (bend.cents, bend.at, bend.dur)
       const bAt = when + (opts.bend.at || 0.08);
       src.detune.setValueAtTime(0, bAt);
@@ -805,7 +808,9 @@ function makeVoice(midi, sustain, opts = {}) {
     env.gain.linearRampToValueAtTime(peak, when + 0.004);            // быстрая атака
     env.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainLvl), when + 0.10); // спад на сустейн
     env.gain.exponentialRampToValueAtTime(0.0001, when + decayT);    // долгое затухание
-    osc.connect(env); sub.connect(subG); subG.connect(env); env.connect(bus);
+    osc.connect(env); sub.connect(subG); subG.connect(env);
+    if (opts.bright) { const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 2600; hs.gain.value = 6; env.connect(hs); hs.connect(bus); } // ап-штрих ярче
+    else env.connect(bus);
     if (opts.bend) { // подтяжка/слайд — как в acoustic-ветке; detune в центах масштабируется на суб-октаву сам
       const bAt = when + (opts.bend.at || 0.08);
       [osc, sub].forEach(o => { o.detune.setValueAtTime(0, bAt); o.detune.linearRampToValueAtTime(opts.bend.cents, bAt + (opts.bend.dur || 0.15)); });
@@ -1573,6 +1578,8 @@ const RHYTHMS = {
     { name:'Регги-поп',    bpm:96,  grid:8,  swing:0.5,  steps:[null,{d:'U'},{d:'D',a:1},{d:'U'},null,{d:'U'},{d:'D',a:1},{d:'U'}] },
     { name:'Фолк',         bpm:120, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},{d:'D'},{d:'U'},{d:'D'},{d:'U'},{d:'D',a:1},null,{d:'D'},{d:'U'},{d:'D'},{d:'U'},{d:'D'},{d:'U'}] },
     { name:'Поп-рок',      bpm:116, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'U'},null,{d:'D'},{d:'U'},{d:'D'},{d:'U'}] },
+    { name:'6/8 Баллада',  bpm:64,  grid:12, swing:0.5,  steps:[{d:'D',a:1},null,{d:'U'},null,{d:'D'},{d:'U'},{d:'D',a:1},null,{d:'U'},null,{d:'D'},{d:'U'}] },
+    { name:'Простые четверти', bpm:72, grid:4, swing:0.5, steps:[{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'}] },
   ],
   funk: [
     { name:'Фанк 16-е',    bpm:104, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'X'},{d:'U'},{d:'X'},null,{d:'U'},null,{d:'X'},{d:'U'},null,{d:'U'},{d:'D',a:1},null,{d:'X'},{d:'U'}] },
@@ -1601,11 +1608,17 @@ function playStrumStroke(notes, when, step, noteDur) {
   if (!step) return;
   const vel = step.a ? 1.0 : 0.62;
   if (step.d === 'X') { chick(when, vel); return; }
-  const STRUM = 0.012; // сек между струнами внутри штриха
+  // строб между струнами: медленнее темп — шире мазок, реггидж/фанк — тайтовый чоп
+  const beat = 60 / (player.bpm || 100);
+  const genre = player.prog && player.prog.genre;
+  let STRUM = beat * 0.03;
+  if (genre === 'reggae' || genre === 'funk') STRUM *= 0.5;
+  STRUM = Math.max(0.005, Math.min(0.02, STRUM));
+  const isUp = step.d === 'U';
   let seq = notes;
-  if (step.d === 'U') seq = notes.slice(-3).reverse(); // ап-страйк: верхние струны, снизу вверх
+  if (isUp) seq = notes.slice(-3).reverse(); // ап-страйк: верхние струны, снизу вверх
   seq.forEach((m, i) => {
-    makeVoice(m, false, { when: when + i * STRUM, dur: noteDur, vel: step.d === 'U' ? vel * 0.7 : vel });
+    makeVoice(m, false, { when: when + i * STRUM, dur: noteDur, vel: isUp ? vel * 0.7 : vel, bright: isUp });
   });
 }
 
@@ -1830,6 +1843,7 @@ const PROGRESSIONS_MINOR = [
   { genre:'blues', name:'Turnaround i–VI–IV–V', degrees:[{d:0,q:'i'},{d:8,q:'VI7'},{d:5,q:'IV7'},{d:7,q:'V7'}], tip:'Turnaround — финальные 4 такта блюза. Ведёт обратно к тонике.' },
   { genre:'blues', name:'Slow Blues i–iv–i–V', degrees:[{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'iv7'},{d:5,q:'iv7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:7,q:'V7'},{d:5,q:'iv7'}], tip:'Медленный блюз. Больше пространства для соло и бендов.' },
   { genre:'blues', name:'Jazz Blues i–IV–VII–III', degrees:[{d:0,q:'i7'},{d:5,q:'IV7'},{d:10,q:'VII7'},{d:3,q:'III7'},{d:8,q:'VI7'},{d:7,q:'V7'},{d:0,q:'i7'},{d:7,q:'V7'}], tip:'Блюз с джазовыми заменами. Сложнее, но очень красиво.' },
+  { genre:'blues', name:'16-Bar Blues', degrees:[{d:0,q:'i7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:0,q:'i7'},{d:7,q:'V7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:7,q:'V7'}], tip:'16 тактов — расширенная блюзовая форма. Больше места, чтобы развить соло.' },
   // ROCK
   { genre:'rock', name:'i – VII – VI – VII', degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:10,q:'VII'}], tip:'Основа хард-рока. Пентатоника звучит мощно.' },
   { genre:'rock', name:'i – VI – III – VII', degrees:[{d:0,q:'i'},{d:8,q:'VI'},{d:3,q:'III'},{d:10,q:'VII'}], tip:'Поп-рок. Ноты 1, b3, 5 звучат красиво.' },
@@ -1842,11 +1856,13 @@ const PROGRESSIONS_MINOR = [
   { genre:'pop', name:'i – VII – VI – VII',  degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:10,q:'VII'}], tip:'Встречается в тысячах поп-хитов.' },
   { genre:'pop', name:'i – V – VI – III',    degrees:[{d:0,q:'i'},{d:7,q:'V'},{d:8,q:'VI'},{d:3,q:'III'}],    tip:'Эмоциональная прогрессия. Медленный темп.' },
   { genre:'pop', name:'i – VI – VII – i',    degrees:[{d:0,q:'i'},{d:8,q:'VI'},{d:10,q:'VII'},{d:0,q:'i'}],   tip:'Простая и цепляющая. Хороша для куплета.' },
+  { genre:'pop', name:'Соул-баллада i–III–VII–iv', degrees:[{d:0,q:'i'},{d:3,q:'III'},{d:10,q:'VII'},{d:5,q:'iv'}], tip:'Соул-баллада: светлый подъём i–bIII, мягкий bVII и возврат через iv. Медленно, с чувством.' },
   // FUNK
   { genre:'funk', name:'i – i – iv – i',     degrees:[{d:0,q:'i'},{d:0,q:'i'},{d:5,q:'iv'},{d:0,q:'i'}],      tip:'Фанк-грув. Акцент на 2 и 4 доле.' },
   { genre:'funk', name:'i7 – IV7',           degrees:[{d:0,q:'i7'},{d:5,q:'IV7'},{d:0,q:'i7'},{d:5,q:'IV7'}],  tip:'Два аккорда — бесконечный грув. Пентатоника ± b7.' },
   { genre:'funk', name:'i – III – iv – VII', degrees:[{d:0,q:'i'},{d:3,q:'III'},{d:5,q:'iv'},{d:10,q:'VII'}],  tip:'Соул и фанк. Синкопированные ноты пентатоники.' },
   { genre:'funk', name:'i – VII – i – VII',  degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:0,q:'i'},{d:10,q:'VII'}],  tip:'Минималистичный фанк. Ритм важнее гармонии.' },
+  { genre:'funk', name:'Дорийский вамп (Oye Como Va)', degrees:[{d:0,q:'i7'},{d:0,q:'i7'},{d:5,q:'IV7'},{d:5,q:'IV7'}], tip:'Дорийский вамп. Мажорный IV подсвечивает натуральную 6-ю ступень — целься в неё и включи дорийский лад.' },
   // REGGAE
   { genre:'reggae', name:'i – VII – VI – VII', degrees:[{d:0,q:'i'},{d:10,q:'VII'},{d:8,q:'VI'},{d:10,q:'VII'}], tip:'Reggae skank. Акцент на "и" доле.' },
   { genre:'reggae', name:'i – iv',              degrees:[{d:0,q:'i'},{d:5,q:'iv'},{d:0,q:'i'},{d:5,q:'iv'}],      tip:'Два аккорда — дыши и качайся.' },
