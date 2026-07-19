@@ -316,6 +316,21 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   /* Genre filter */
   .myjams { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; align-items:flex-start; }
   .myjams .prog-item { width:100%; }
+
+  /* ── Минусовка ── */
+  .bt-section { margin-top:26px; }
+  .bt-card { background:var(--panel); border:1px solid #2a2830; border-radius:6px; padding:12px 14px; }
+  .bt-name { font-size:11px; color:var(--text); display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .bt-name .dur { color:var(--muted); }
+  .bt-bar { position:relative; height:26px; background:#1a1922; border-radius:4px; cursor:pointer; margin-bottom:10px; overflow:hidden; }
+  .bt-fill { position:absolute; left:0; top:0; bottom:0; background:#3a3450; pointer-events:none; }
+  .bt-mark { position:absolute; top:0; bottom:0; width:2px; background:var(--accent); pointer-events:none; }
+  .bt-mark.b { background:var(--accent2); }
+  .bt-loopzone { position:absolute; top:0; bottom:0; background:rgba(232,160,48,.14); pointer-events:none; }
+  .bt-time { font-size:11px; color:var(--muted); min-width:86px; }
+  .bt-btn { background:#232230; border:1px solid #2a2830; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:13px; width:40px; height:32px; border-radius:4px; cursor:pointer; }
+  .bt-btn.small { width:32px; font-size:11px; }
+  .bt-btn.on { border-color:var(--accent); color:var(--accent); }
   .genre-filter { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
   .genre-btn {
     background:var(--panel); border:1px solid #2a2830; color:var(--muted);
@@ -498,6 +513,13 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
     <div class="genre-filter" id="genreFilter"></div>
     <div class="prog-list" id="progList"></div>
     <div class="prog-hint" id="progHint"></div>
+  </div>
+
+  <!-- BACKING TRACK -->
+  <div class="bt-section">
+    <div class="lbl">6. Минусовка</div>
+    <div id="btBox"></div>
+    <input type="file" id="btFile" accept="audio/*" style="display:none">
   </div>
 </div><!-- end .main -->
 </div><!-- end #tab-penta -->
@@ -1994,6 +2016,7 @@ function playerHighlight() {
 function startPlayer(prog, ri, cardEl, rhythmIdx) {
   stopPlayer();
   stopAllNotes();
+  if (typeof btPause === 'function') btPause(); // джем-луп вместо минусовки
   const ctx = getCtx();
   const pats = RHYTHMS[prog.genre] || RHYTHMS.rock;
   player.prog    = prog;
@@ -2550,6 +2573,289 @@ function renderMyJams() {
   wrap.appendChild(box);
 }
 
+// ═══ МИНУСОВКА (backing track) ═════════════════════
+// Свой трек (mp3/wav) + A-B луп фрагмента — играть поверх живьём. Аккорды треку неизвестны,
+// поэтому подсветки тонов нет: тональность выбирается сверху, пентатоника уже на грифе.
+// Файл хранится в IndexedDB (последний загруженный), настройки (луп/громкость) — в localStorage.
+const BT_LS = 'penta-trainer-backing';
+const bt = {
+  file: null, buf: null, name: '',
+  src: null, gainNode: null,
+  playing: false, startedAt: 0, offset: 0,
+  loopA: null, loopB: null, vol: 0.9,
+  raf: null,
+};
+
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function btHasLoop() {
+  return bt.loopA !== null && bt.loopB !== null && bt.loopB - bt.loopA > 0.05;
+}
+
+// Текущая позиция в треке (с учётом зацикливания A-B)
+function btPos() {
+  if (!bt.buf) return 0;
+  let p = bt.playing ? bt.offset + (getCtx().currentTime - bt.startedAt) : bt.offset;
+  if (btHasLoop() && p > bt.loopB) p = bt.loopA + ((p - bt.loopA) % (bt.loopB - bt.loopA));
+  return Math.min(p, bt.buf.duration);
+}
+
+function btSavePrefs() {
+  try { localStorage.setItem(BT_LS, JSON.stringify({ name: bt.name, loopA: bt.loopA, loopB: bt.loopB, vol: bt.vol })); } catch(e) {}
+}
+function btRestorePrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(BT_LS) || '{}');
+    if (p.name === bt.name) { // луп восстанавливаем только для того же файла
+      if (typeof p.loopA === 'number') bt.loopA = p.loopA;
+      if (typeof p.loopB === 'number') bt.loopB = p.loopB;
+    }
+    if (typeof p.vol === 'number' && p.vol >= 0 && p.vol <= 1.5) bt.vol = p.vol;
+  } catch(e) {}
+}
+
+// IndexedDB: один сохранённый трек под ключом 'last'
+function btDb() {
+  return new Promise((res, rej) => {
+    if (typeof indexedDB === 'undefined') { rej(new Error('no idb')); return; }
+    const r = indexedDB.open('penta-trainer', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('tracks');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function btSaveFile(file) {
+  btDb().then(db => { db.transaction('tracks', 'readwrite').objectStore('tracks').put(file, 'last'); }).catch(() => {});
+}
+function btDeleteFile() {
+  btDb().then(db => { db.transaction('tracks', 'readwrite').objectStore('tracks').delete('last'); }).catch(() => {});
+}
+// При старте достаём сохранённый файл, но НЕ декодируем (AudioContext требует жеста) — декод при первом ▶
+function btLoadSaved() {
+  btDb().then(db => {
+    const req = db.transaction('tracks').objectStore('tracks').get('last');
+    req.onsuccess = () => {
+      const f = req.result;
+      if (f && f.name) { bt.file = f; bt.name = f.name; btRestorePrefs(); renderBackingTrack(); }
+    };
+  }).catch(() => {});
+}
+
+async function btDecode() {
+  if (bt.buf || !bt.file) return;
+  const ctx = getCtx();
+  const ab = await bt.file.arrayBuffer();
+  bt.buf = await ctx.decodeAudioData(ab);
+}
+
+function btStopSource() {
+  if (bt.src) { try { bt.src.onended = null; bt.src.stop(); } catch(e) {} bt.src = null; }
+  if (bt.raf) { cancelAnimationFrame(bt.raf); bt.raf = null; }
+}
+
+async function btPlay() {
+  if (!bt.file && !bt.buf) return;
+  // взаимоисключение: минусовка вместо джем-лупа/лика
+  if (player.running) { stopPlayer(); stopAllNotes(); }
+  if (lickPlayer.running) stopLick();
+  try { await btDecode(); } catch(e) { bt.file = null; bt.name = ''; renderBackingTrack(); return; }
+  btStopSource();
+  const ctx = getCtx();
+  if (!bt.gainNode) { bt.gainNode = ctx.createGain(); bt.gainNode.connect(getMaster()); }
+  bt.gainNode.gain.value = bt.vol;
+  const src = ctx.createBufferSource();
+  src.buffer = bt.buf;
+  if (btHasLoop()) { src.loop = true; src.loopStart = bt.loopA; src.loopEnd = bt.loopB; }
+  src.connect(bt.gainNode);
+  if (bt.offset >= bt.buf.duration - 0.05) bt.offset = btHasLoop() ? bt.loopA : 0;
+  src.start(0, bt.offset);
+  src.onended = () => { if (bt.src === src) { bt.playing = false; bt.offset = 0; btStopSource(); renderBackingTrack(); } };
+  bt.src = src;
+  bt.playing = true;
+  bt.startedAt = ctx.currentTime;
+  renderBackingTrack();
+}
+
+function btPause() {
+  if (!bt.playing) return;
+  bt.offset = btPos();
+  bt.playing = false;
+  btStopSource();
+  renderBackingTrack();
+}
+
+function btStop() {
+  bt.offset = btHasLoop() ? bt.loopA : 0;
+  bt.playing = false;
+  btStopSource();
+  renderBackingTrack();
+}
+
+function btSeek(t) {
+  if (!bt.buf) return;
+  bt.offset = Math.max(0, Math.min(t, bt.buf.duration - 0.05));
+  if (bt.playing) btPlay(); else renderBackingTrack();
+}
+
+function btSetMark(which) {
+  const p = btPos();
+  if (which === 'A') { bt.loopA = p; if (bt.loopB !== null && bt.loopB <= p + 0.05) bt.loopB = null; }
+  else { if (bt.loopA === null || p <= bt.loopA + 0.05) return; bt.loopB = p; }
+  btSavePrefs();
+  if (bt.playing && btHasLoop()) { bt.offset = btPos(); btPlay(); } else renderBackingTrack();
+}
+
+function btClearLoop() {
+  bt.offset = btPos(); // не дёргать позицию при пересоздании источника
+  bt.loopA = null; bt.loopB = null;
+  btSavePrefs();
+  if (bt.playing) btPlay(); else renderBackingTrack();
+}
+
+function btRemoveTrack() {
+  btStopSource();
+  bt.playing = false;
+  bt.file = null; bt.buf = null; bt.name = ''; bt.offset = 0; bt.loopA = null; bt.loopB = null;
+  btDeleteFile();
+  btSavePrefs();
+  renderBackingTrack();
+}
+
+function renderBackingTrack() {
+  const box = document.getElementById('btBox');
+  if (!box) return;
+  box.innerHTML = '';
+
+  const fileInp = document.getElementById('btFile');
+  if (fileInp && !fileInp.dataset.wired) {
+    fileInp.dataset.wired = '1';
+    fileInp.onchange = () => {
+      const f = fileInp.files && fileInp.files[0];
+      if (!f) return;
+      btStopSource();
+      bt.playing = false;
+      bt.file = f; bt.buf = null; bt.name = f.name;
+      bt.offset = 0; bt.loopA = null; bt.loopB = null;
+      btRestorePrefs();
+      btSaveFile(f);
+      btSavePrefs();
+      renderBackingTrack();
+      fileInp.value = '';
+    };
+  }
+
+  if (!bt.name) {
+    const load = document.createElement('button');
+    load.className = 'ro-btn';
+    load.textContent = '🎵 Загрузить трек';
+    load.title = 'Свой mp3/wav: играй поверх, A-B луп для отработки фрагмента';
+    load.onclick = () => fileInp && fileInp.click();
+    box.appendChild(load);
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'bt-card';
+
+  // имя + длительность + смена/удаление
+  const nameRow = document.createElement('div');
+  nameRow.className = 'bt-name';
+  const nm = document.createElement('span'); nm.textContent = '🎵 ' + bt.name;
+  nameRow.appendChild(nm);
+  if (bt.buf) { const du = document.createElement('span'); du.className = 'dur'; du.textContent = fmtTime(bt.buf.duration); nameRow.appendChild(du); }
+  const chg = document.createElement('button'); chg.className = 'bt-btn small'; chg.textContent = '📂'; chg.title = 'Загрузить другой трек';
+  chg.onclick = () => fileInp && fileInp.click();
+  nameRow.appendChild(chg);
+  const del = document.createElement('button'); del.className = 'bt-btn small'; del.textContent = '✖'; del.title = 'Убрать трек';
+  del.onclick = btRemoveTrack;
+  nameRow.appendChild(del);
+  card.appendChild(nameRow);
+
+  // прогресс-бар с маркерами
+  const bar = document.createElement('div');
+  bar.className = 'bt-bar';
+  const loopZone = document.createElement('div'); loopZone.className = 'bt-loopzone'; bar.appendChild(loopZone);
+  const fill = document.createElement('div'); fill.className = 'bt-fill'; bar.appendChild(fill);
+  const markA = document.createElement('div'); markA.className = 'bt-mark'; bar.appendChild(markA);
+  const markB = document.createElement('div'); markB.className = 'bt-mark b'; bar.appendChild(markB);
+  bar.onclick = (e) => {
+    if (!bt.buf) return;
+    const r = bar.getBoundingClientRect();
+    btSeek(((e.clientX - r.left) / r.width) * bt.buf.duration);
+  };
+  card.appendChild(bar);
+
+  // управление
+  const row = document.createElement('div');
+  row.className = 'rp-row';
+  const play = document.createElement('button'); play.className = 'bt-btn'; play.textContent = bt.playing ? '⏸' : '▶';
+  play.onclick = () => { bt.playing ? btPause() : btPlay(); };
+  row.appendChild(play);
+  const stop = document.createElement('button'); stop.className = 'bt-btn'; stop.textContent = '⏹'; stop.title = 'В начало (или к маркеру A)';
+  stop.onclick = btStop;
+  row.appendChild(stop);
+  const time = document.createElement('span'); time.className = 'bt-time';
+  row.appendChild(time);
+  card.appendChild(row);
+
+  // A-B луп + громкость
+  const row2 = document.createElement('div');
+  row2.className = 'rp-row';
+  const aBtn = document.createElement('button'); aBtn.className = 'bt-btn small' + (bt.loopA !== null ? ' on' : ''); aBtn.textContent = 'A'; aBtn.title = 'Начало лупа — в текущей позиции';
+  aBtn.onclick = () => btSetMark('A');
+  row2.appendChild(aBtn);
+  const bBtn = document.createElement('button'); bBtn.className = 'bt-btn small' + (bt.loopB !== null ? ' on' : ''); bBtn.textContent = 'B'; bBtn.title = 'Конец лупа — в текущей позиции (после A)';
+  bBtn.onclick = () => btSetMark('B');
+  row2.appendChild(bBtn);
+  const clr = document.createElement('button'); clr.className = 'bt-btn small'; clr.textContent = '✖'; clr.title = 'Сбросить луп';
+  clr.onclick = btClearLoop;
+  row2.appendChild(clr);
+  const loopLbl = document.createElement('span'); loopLbl.className = 'bt-time';
+  loopLbl.textContent = btHasLoop() ? `луп ${fmtTime(bt.loopA)}–${fmtTime(bt.loopB)}` : (bt.loopA !== null ? `A ${fmtTime(bt.loopA)}…` : '');
+  row2.appendChild(loopLbl);
+  const volIco = document.createElement('span'); volIco.textContent = '🔊'; volIco.style.fontSize = '12px';
+  row2.appendChild(volIco);
+  const vol = document.createElement('input');
+  vol.type = 'range'; vol.min = 0; vol.max = 1.5; vol.step = 0.05; vol.value = bt.vol;
+  vol.className = 'bpm-inp'; vol.style.maxWidth = '110px';
+  vol.oninput = () => { bt.vol = parseFloat(vol.value); if (bt.gainNode) bt.gainNode.gain.value = bt.vol; };
+  vol.onchange = btSavePrefs;
+  row2.appendChild(vol);
+  card.appendChild(row2);
+
+  const hint = document.createElement('div');
+  hint.className = 'prog-hint';
+  hint.style.marginTop = '8px';
+  hint.textContent = '💡 Поставь A в начале фрагмента, B в конце — луп для отработки. Тональность выбери сверху, пентатоника уже на грифе.';
+  card.appendChild(hint);
+
+  box.appendChild(card);
+
+  // живое обновление позиции/бара
+  const upd = () => {
+    const dur = bt.buf ? bt.buf.duration : 0;
+    const p = btPos();
+    time.textContent = fmtTime(p) + ' / ' + (dur ? fmtTime(dur) : '–:––');
+    fill.style.width = dur ? (p / dur * 100) + '%' : '0';
+    markA.style.display = bt.loopA !== null && dur ? 'block' : 'none';
+    markB.style.display = bt.loopB !== null && dur ? 'block' : 'none';
+    if (dur) {
+      if (bt.loopA !== null) markA.style.left = (bt.loopA / dur * 100) + '%';
+      if (bt.loopB !== null) markB.style.left = (bt.loopB / dur * 100) + '%';
+      if (btHasLoop()) {
+        loopZone.style.left = (bt.loopA / dur * 100) + '%';
+        loopZone.style.width = ((bt.loopB - bt.loopA) / dur * 100) + '%';
+        loopZone.style.display = 'block';
+      } else loopZone.style.display = 'none';
+    }
+    if (bt.playing) bt.raf = requestAnimationFrame(upd);
+  };
+  upd();
+}
+
 // ═══ TAB SWITCHING ════════════════════════════════
 function switchTab(tab) {
   stopAllNotes();
@@ -3001,12 +3307,15 @@ function render() {
 loadState();
 loadMyJams();
 render();
+btRestorePrefs();
+renderBackingTrack();
+btLoadSaved();
 syncNoteLabelButtons();
 if (activeTab === 'chords') switchTab('chords');
 const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol;
 
 // Гасим звук при сворачивании вкладки/приложения
-document.addEventListener('visibilitychange', () => { if (document.hidden) stopAllNotes(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAllNotes(); btPause(); } });
 window.addEventListener('pagehide', stopAllNotes);
 
 // ═══ PWA ══════════════════════════════════════════
