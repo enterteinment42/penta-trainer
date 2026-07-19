@@ -314,6 +314,8 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   .prog-hint { margin-top:6px; font-size:10px; color:var(--muted); letter-spacing:.5px; }
 
   /* Genre filter */
+  .myjams { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; align-items:flex-start; }
+  .myjams .prog-item { width:100%; }
   .genre-filter { display:flex; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
   .genre-btn {
     background:var(--panel); border:1px solid #2a2830; color:var(--muted);
@@ -492,6 +494,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   <!-- CHORD PROGRESSIONS -->
   <div class="prog-section">
     <div class="lbl">5. Аккордовые прогрессии для джема</div>
+    <div class="myjams" id="myJams"></div>
     <div class="genre-filter" id="genreFilter"></div>
     <div class="prog-list" id="progList"></div>
     <div class="prog-hint" id="progHint"></div>
@@ -963,6 +966,50 @@ function bassNote(midi, when, dur, vel = 1) {
   regStop(osc, when); regStop(sub, when);
 }
 
+// Шум-буфер хай-хэта: один на всё приложение — хэтов много, буфер переиспользуем
+let hatBuf = null;
+function getHatBuf(ctx) {
+  if (hatBuf && hatBuf.sampleRate === ctx.sampleRate) return hatBuf;
+  const len = Math.floor(ctx.sampleRate * 0.35);
+  hatBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = hatBuf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return hatBuf;
+}
+
+// Хай-хэт: шум через хайпас. open=true — открытый (длиннее, чуть громче)
+function hat(when, vel = 1, open = false) {
+  const ctx = getCtx();
+  const src = ctx.createBufferSource(); src.buffer = getHatBuf(ctx);
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 7500; hp.Q.value = 0.7;
+  const g = ctx.createGain();
+  const decay = open ? 0.30 : 0.045;
+  g.gain.setValueAtTime((open ? 0.20 : 0.16) * vel, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+  src.connect(hp); hp.connect(g); g.connect(getMaster());
+  src.start(when); src.stop(when + decay + 0.02);
+  regStop(src, when);
+}
+
+// Том (для сбивок): синус с питч-спадом — выше и короче бочки
+function tom(when, vel = 1, freq = 160) {
+  const ctx = getCtx();
+  const osc = ctx.createOscillator(); osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, when);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.55, when + 0.12);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(0.5 * vel, when + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
+  osc.connect(g); g.connect(getMaster());
+  osc.start(when); osc.stop(when + 0.2);
+  regStop(osc, when);
+}
+
+// «Живость»: микро-сдвиг тайминга (мс) и громкости, чтобы секция не звучала драм-машиной
+function humT(t, ms = 6) { return t + (Math.random() * 2 - 1) * ms / 1000; }
+function humV(v, pct = 0.12) { return Math.max(0.05, v * (1 + (Math.random() * 2 - 1) * pct)); }
+
 // Одиночная нота на грифе (press-and-hold)
 function startNote(midi) {
   return makeVoice(midi, true);
@@ -985,7 +1032,7 @@ function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
-      rhythmOnlyOn, countInOn, blueNoteOn, bandOn,
+      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn,
     }));
   } catch(e) {}
 }
@@ -1005,6 +1052,7 @@ function loadState() {
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
     if (typeof st.countInOn === 'boolean') countInOn = st.countInOn;
     if (typeof st.bandOn === 'boolean') bandOn = st.bandOn;
+    if (typeof st.jamOn === 'boolean') jamOn = st.jamOn;
     if (typeof st.blueNoteOn === 'boolean') blueNoteOn = st.blueNoteOn;
     if (typeof st.masterVol === 'number' && st.masterVol >= 0 && st.masterVol <= 1.5) masterVol = st.masterVol;
   } catch(e) {}
@@ -1650,6 +1698,7 @@ let metroOn = false; // глобальная настройка: клик мет
 let rhythmOnlyOn = false; // режим «только ритм»: луп на одной тонике (отработка боя)
 let countInOn = false; // отсчёт «1-2-3-4» перед стартом лупа — успеть взять гитару
 let bandOn = false; // ритм-секция: бас (тоника-квинта) + бочка/снейр под жанр
+let jamOn = false; // джем-режим: аранжировка — интро, хэт, сбивки, жанровый бас, динамика по кругам
 
 // Рисунки ритм-секции по жанрам. Позиции — в долях такта (0..4).
 // bass: [доля, 'R'|'5'] — R=тоника, 5=квинта (тоника+7). Реггидж — one-drop + бас на офф-битах.
@@ -1660,6 +1709,128 @@ const BAND = {
   funk:   { kick:[0,0.75,2.5], snare:[1,3], bass:[[0,'R'],[0.75,'R'],[2,'5'],[2.5,'R'],[3,'5']] },
   reggae: { kick:[2],          snare:[2],   bass:[[0.5,'R'],[2,'5'],[3.5,'R']] },
 };
+
+// ── Джем-движок: аранжировка поверх ритм-секции ──
+// Форма вместо плоского лупа: интро 2 такта (бас+хэт) → круги прогрессии с растущей
+// интенсивностью → сбивка в конце каждой 4-тактовой фразы → открытый хэт на «1» новой фразы.
+const JAM_INTRO_BARS = 2;
+
+// Индекс аккорда прогрессии для такта — с поправкой на интро джема
+function jamChordIdx(barIdx) {
+  if (player.rhythmOnly) return 0;
+  const intro = player.jam ? JAM_INTRO_BARS : 0;
+  return barIdx < intro ? 0 : (barIdx - intro) % player.prog.degrees.length;
+}
+
+// Бас-партия такта: жанровые линии из тонов аккорда + хроматический подход к следующему корню.
+// Возвращает [[доля, midi], ...]
+function jamBassLine(genre, rootMidi, q, nextRootMidi, intensity) {
+  const minor3 = ['i','iv','vi','i7','iv7','vi7'].includes(q);
+  const third = rootMidi + (minor3 ? 3 : 4);
+  const fifth = rootMidi + 7;
+  const app = nextRootMidi + (nextRootMidi > rootMidi ? -1 : 1); // подход полутоном
+  switch (genre) {
+    case 'blues': // walking четвертями: 1 – 3 – 5 – подход
+      return [[0, rootMidi], [1, third], [2, fifth], [3, app]];
+    case 'funk':
+      return intensity > 0
+        ? [[0, rootMidi], [0.75, rootMidi], [1.5, q.includes('7') ? rootMidi + 10 : fifth], [2.5, rootMidi], [3.25, fifth], [3.75, app]]
+        : [[0, rootMidi], [0.75, rootMidi], [2.5, rootMidi], [3.5, fifth]];
+    case 'reggae':
+      return [[0.5, rootMidi], [2, fifth], [3.5, app]];
+    default: // rock / pop
+      return intensity > 0
+        ? [[0, rootMidi], [0.5, rootMidi], [1, fifth], [2, rootMidi], [2.5, rootMidi], [3, app]]
+        : [[0, rootMidi], [1, fifth], [2, rootMidi], [3, app]];
+  }
+}
+
+// Барабаны такта в джем-режиме: бэкбит + хэт со свингом, гост-ноты, сбивки
+function jamDrums(genre, barStart, beat, swing, intensity, isFillBar, afterFill) {
+  const H = (b, v, open) => hat(humT(barStart + b * beat), humV(v), open);
+  const K = (b, v = 1) => kick(barStart + b * beat, v);
+  const S = (b, v = 1) => snare(humT(barStart + b * beat, 3), humV(v, 0.06));
+  const G = (b) => snare(humT(barStart + b * beat), 0.16); // гост-нота
+
+  // сбивка занимает 4-ю долю: снейры + томы по 16-м с крещендо (регги — короткий рим-дабл)
+  const fill = () => {
+    if (genre === 'reggae') { S(3.5, 0.35); S(3.75, 0.5); return; }
+    S(3, 0.4); S(3.25, 0.55);
+    tom(barStart + 3.5 * beat, 0.7, 210);
+    tom(barStart + 3.75 * beat, 0.9, 150);
+  };
+
+  if (genre === 'funk') {
+    K(0); K(0.75, 0.9); K(2.5, 0.9);
+    S(1); if (!isFillBar) S(3);
+    G(1.75); if (intensity > 0) { G(0.5); if (!isFillBar) G(3.25); }
+    for (let s = 0; s < 16; s++) {
+      const b = s / 4;
+      if (isFillBar && b >= 3) break;
+      if (b === 0 && afterFill) { H(0, 0.8, true); continue; }
+      if (intensity > 0 && s === 3) H(b, 0.6, true);
+      else H(b, s % 4 === 0 ? 0.55 : 0.3);
+    }
+  } else if (genre === 'reggae') {
+    K(2); S(2, 0.55);
+    for (let b = 0; b < 4; b++) {
+      if (isFillBar && b === 3) break;
+      H(b + 0.5, 0.5);
+      if (intensity > 0) H(b, 0.28);
+    }
+    if (afterFill) H(0, 0.6, true);
+  } else { // blues / rock / pop
+    K(0); K(2); if (intensity > 1) K(2.5, 0.85);
+    S(1); if (!isFillBar) S(3);
+    const off = genre === 'blues' ? swing : 0.5; // блюз — свингованная офф-восьмая
+    for (let b = 0; b < 4; b++) {
+      if (isFillBar && b === 3) break;
+      if (b === 0 && afterFill) H(0, 0.8, true);
+      else H(b, b % 2 === 0 ? 0.6 : 0.5);
+      H(b + off, 0.35);
+      if (intensity > 1 && genre !== 'blues') { H(b + 0.25, 0.2); H(b + 0.75, 0.2); }
+    }
+    if (intensity > 0 && genre === 'blues') G(2 + swing);
+  }
+  if (isFillBar) fill();
+}
+
+// Ритм-секция такта в джем-режиме: интро → барабаны с формой → жанровый бас
+function scheduleJamBand(barIdx, barStart, beat, ch, rootMidi) {
+  const genre = BAND[player.prog.genre] ? player.prog.genre : 'rock';
+  const swing = player.rhythm.swing || 0.5;
+  const len = player.prog.degrees.length;
+  const bassRoot = rootMidi - 12;
+  const nextCh = player.prog.degrees[jamChordIdx(barIdx + 1)];
+  const nextBassRoot = degreeRootMidi(player.ri, nextCh.d) - 12;
+  const isIntro = barIdx < JAM_INTRO_BARS;
+  const bar = barIdx - JAM_INTRO_BARS;
+  const cycle = Math.floor(bar / len);
+  // интенсивность по кругам: первый круг — база, дальше чередуем плотнее/плотнее+акценты
+  const intensity = isIntro || cycle === 0 ? 0 : (cycle % 2 ? 1 : 2);
+  const isFillBar = !isIntro && (bar + 1) % 4 === 0;
+  const afterFill = !isIntro && bar > 0 && bar % 4 === 0;
+  const bassDur = beat * (genre === 'reggae' ? 0.45 : genre === 'funk' ? 0.35 : 0.8);
+
+  if (isIntro) { // разрежённое интро: хэт восьмыми + бас тоника-квинта, в конце — разгон
+    for (let b = 0; b < 4; b++) {
+      hat(humT(barStart + b * beat), humV(0.5));
+      hat(humT(barStart + (b + swing) * beat), humV(0.32));
+    }
+    bassNote(bassRoot, barStart, beat * 0.9, 0.85);
+    bassNote(bassRoot + 7, barStart + 2 * beat, beat * 0.9, 0.8);
+    if (barIdx === JAM_INTRO_BARS - 1) {
+      bassNote(nextBassRoot + (nextBassRoot > bassRoot ? -1 : 1), barStart + 3.5 * beat, beat * 0.4, 0.85);
+      snare(barStart + 3.5 * beat, 0.3); snare(barStart + 3.75 * beat, 0.45);
+    }
+    return;
+  }
+
+  jamDrums(genre, barStart, beat, swing, intensity, isFillBar, afterFill);
+  jamBassLine(genre, bassRoot, ch.q, nextBassRoot, intensity).forEach(([b, m]) => {
+    bassNote(m, humT(barStart + b * beat, 4), bassDur, humV(0.9, 0.08));
+  });
+}
 
 function stopPlayer() {
   if (player.timer) { clearInterval(player.timer); player.timer = null; }
@@ -1690,24 +1861,33 @@ function scheduleBar(barIdx, barStart) {
   const beat  = 60 / player.bpm;
   const barLen = beat * 4;
   const stepLen = barLen / r.grid;
-  const ch    = player.rhythmOnly ? player.prog.degrees[0] : player.prog.degrees[barIdx % player.prog.degrees.length];
+  const ch    = player.prog.degrees[jamChordIdx(barIdx)];
   const rootMidi = degreeRootMidi(player.ri, ch.d);
   const notes = chordNotes(rootMidi, ch.q);
   const pairSpan = stepLen * 2;
 
-  r.steps.forEach((step, i) => {
-    if (!step) return;
-    let t;
-    if (i % 2 === 0) t = barStart + (i/2) * pairSpan;
-    else             t = barStart + ((i-1)/2) * pairSpan + pairSpan * r.swing; // свинг смещает офф-бит
-    // длительность ноты: до конца такта, но не больше 1.6с; скэнк — короткий стаккато
-    const isSkank = player.prog.genre === 'reggae';
-    const noteDur = isSkank ? 0.22 : Math.min(1.6, barStart + barLen - t + 0.1);
-    playStrumStroke(notes, t, step, noteDur);
-    player.events.push({ time: t, stepIdx: i, barIdx });
-  });
-  // ритм-секция: бас (тоника-квинта) + бочка/снейр по жанру
-  if (player.band) {
+  if (player.jam && barIdx < JAM_INTRO_BARS) {
+    // интро джема: гитара — один мягкий удар на «1», остальное играет секция
+    playStrumStroke(notes, barStart, { d:'D', a: barIdx === 0 ? 1 : 0 }, Math.min(1.6, barLen));
+    const si = r.steps.findIndex(s => s);
+    player.events.push({ time: barStart, stepIdx: si < 0 ? 0 : si, barIdx });
+  } else {
+    r.steps.forEach((step, i) => {
+      if (!step) return;
+      let t;
+      if (i % 2 === 0) t = barStart + (i/2) * pairSpan;
+      else             t = barStart + ((i-1)/2) * pairSpan + pairSpan * r.swing; // свинг смещает офф-бит
+      // длительность ноты: до конца такта, но не больше 1.6с; скэнк — короткий стаккато
+      const isSkank = player.prog.genre === 'reggae';
+      const noteDur = isSkank ? 0.22 : Math.min(1.6, barStart + barLen - t + 0.1);
+      playStrumStroke(notes, t, step, noteDur);
+      player.events.push({ time: t, stepIdx: i, barIdx });
+    });
+  }
+  // джем-режим: полная аранжировка; иначе — простая ритм-секция по тумблеру
+  if (player.jam) {
+    scheduleJamBand(barIdx, barStart, beat, ch, rootMidi);
+  } else if (player.band) {
     const bd = BAND[player.prog.genre] || BAND.rock;
     const bassRoot = rootMidi - 12; // бас-октава
     const bassDur  = beat * (player.prog.genre === 'reggae' ? 0.4 : 0.85);
@@ -1769,7 +1949,7 @@ function playerHighlight() {
   for (const e of player.events) { if (e.time <= t + 0.02) cur = e; }
   if (cur && player.cardEl) {
     const pills = player.cardEl.querySelectorAll('.chord-pill');
-    const idx = player.rhythmOnly ? 0 : cur.barIdx % player.prog.degrees.length;
+    const idx = jamChordIdx(cur.barIdx);
     pills.forEach((p, i) => p.classList.toggle('playing', i === idx));
     const strip = player.cardEl.querySelectorAll('.rs-step');
     strip.forEach((sEl, i) => sEl.classList.toggle('on', i === cur.stepIdx));
@@ -1800,6 +1980,7 @@ function startPlayer(prog, ri, cardEl, rhythmIdx) {
   player.metro   = metroOn;
   player.rhythmOnly = rhythmOnlyOn;
   player.band    = bandOn;
+  player.jam     = jamOn;
   player.countEvents = [];
   player.running = true;
 
@@ -1928,14 +2109,9 @@ function renderGenreFilter() {
   });
 }
 
-function renderProgressions() {
-  const list  = document.getElementById('progList');
-  list.innerHTML = '';
-  const ri    = CHROMATIC.indexOf(selKey);
-  const all   = selMode === 'minor' ? PROGRESSIONS_MINOR : PROGRESSIONS_MAJOR;
-  const progs = selGenre === 'all' ? all : all.filter(p => p.genre === selGenre);
-
-  progs.forEach(prog => {
+// Карточка одной прогрессии — общая для библиотеки и «Моих джемов».
+// opts.onDelete — добавляет кнопку удаления (для своих джемов)
+function buildProgCard(prog, ri, opts = {}) {
     const item = document.createElement('div');
     item.className = 'prog-item';
 
@@ -1948,6 +2124,7 @@ function renderProgressions() {
     tag.textContent = GENRES.find(g => g.id === prog.genre)?.label || prog.genre;
     const nameEl = document.createElement('span');
     nameEl.style.cssText = 'font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);';
+    if (opts.onDelete) nameEl.style.textTransform = 'none'; // имя своего джема — из аккордов, капс исказил бы «Am» в «AM»
     nameEl.textContent = prog.name;
     header.appendChild(tag);
     header.appendChild(nameEl);
@@ -1958,6 +2135,17 @@ function renderProgressions() {
     playBtn.textContent = '▶';
     playBtn.title = 'Играть прогрессию с ритмом';
     header.appendChild(playBtn);
+    if (opts.onDelete) {
+      const delBtn = document.createElement('button');
+      delBtn.className = 'play-btn';
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Удалить джем';
+      delBtn.onclick = () => {
+        if (player.running && player.cardEl === item) { stopPlayer(); stopAllNotes(); }
+        opts.onDelete();
+      };
+      header.appendChild(delBtn);
+    }
     item.appendChild(header);
 
     // Панель ритма (раскрывается при игре): выбор боя + BPM + полоска штрихов
@@ -2105,6 +2293,19 @@ function renderProgressions() {
       saveState();
     };
     optRow.appendChild(bandBtn);
+    // джем-режим: аранжировка (интро, хэт, сбивки, жанровый бас, динамика по кругам)
+    const jamBtn = document.createElement('button');
+    jamBtn.className = 'ro-btn' + (jamOn ? ' on' : '');
+    jamBtn.textContent = '🎛 Джем';
+    jamBtn.title = 'Джем-трек: интро, хай-хэт, сбивки, жанровый бас, динамика по кругам. Включает ритм-секцию.';
+    jamBtn.onclick = () => {
+      jamOn = !jamOn;
+      jamBtn.classList.toggle('on', jamOn);
+      saveState();
+      // перезапуск лупа, чтобы интро и форма отыгрались с начала
+      if (player.running && player.cardEl === item) startPlayer(prog, ri, item, selPat);
+    };
+    optRow.appendChild(jamBtn);
     rPanel.appendChild(optRow);
     item.appendChild(rPanel);
 
@@ -2162,13 +2363,165 @@ function renderProgressions() {
 
     item.appendChild(chordsEl);
 
-    const tip = document.createElement('div');
-    tip.className = 'prog-hint';
-    tip.textContent = '💡 ' + prog.tip;
-    item.appendChild(tip);
+    if (prog.tip) {
+      const tip = document.createElement('div');
+      tip.className = 'prog-hint';
+      tip.textContent = '💡 ' + prog.tip;
+      item.appendChild(tip);
+    }
 
-    list.appendChild(item);
+    return item;
+}
+
+function renderProgressions() {
+  const list  = document.getElementById('progList');
+  list.innerHTML = '';
+  const ri    = CHROMATIC.indexOf(selKey);
+  const all   = selMode === 'minor' ? PROGRESSIONS_MINOR : PROGRESSIONS_MAJOR;
+  const progs = selGenre === 'all' ? all : all.filter(p => p.genre === selGenre);
+  progs.forEach(prog => list.appendChild(buildProgCard(prog, ri)));
+}
+
+// ═══ МОИ ДЖЕМЫ: конструктор своих прогрессий ═══════
+// Аккорды хранятся АБСОЛЮТНО (d = pitch class от C, ri при игре всегда 0):
+// вбил Am–F–C–G из песни — так и играет, тональность грифа не транспонирует джем.
+const MYJAMS_KEY = 'penta-trainer-myjams';
+let myJams = [];
+function loadMyJams() {
+  try {
+    const a = JSON.parse(localStorage.getItem(MYJAMS_KEY) || '[]');
+    if (Array.isArray(a)) myJams = a.filter(j => j && Array.isArray(j.chords) && j.chords.length >= 2 && RHYTHMS[j.genre]);
+  } catch(e) {}
+}
+function saveMyJams() {
+  try { localStorage.setItem(MYJAMS_KEY, JSON.stringify(myJams)); } catch(e) {}
+}
+
+const MJ_QUALITIES = [ {id:'I', label:'МАЖОР'}, {id:'i', label:'МИНОР'}, {id:'I7', label:'7'}, {id:'i7', label:'m7'} ];
+let mjChords = [];   // черновик конструктора: [{d, q}]
+let mjQ = 'i';       // выбранное качество для следующего аккорда
+let mjGenre = 'rock';
+let mjOpen = false;  // конструктор раскрыт?
+
+function mjProg(j) { return { genre: j.genre, name: j.name, degrees: j.chords, tip: '' }; }
+function mjAutoName(chords) { return chords.map(c => chordLabel(c, 0)).join(' – '); }
+
+function renderMyJams() {
+  const wrap = document.getElementById('myJams');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  // сохранённые джемы — обычные карточки с ▶ и панелью ритма, ri=0 (абсолютные аккорды)
+  myJams.forEach((j, ji) => {
+    wrap.appendChild(buildProgCard(mjProg(j), 0, {
+      onDelete: () => { myJams.splice(ji, 1); saveMyJams(); renderMyJams(); },
+    }));
   });
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'ro-btn' + (mjOpen ? ' on' : '');
+  openBtn.textContent = mjOpen ? '✖ Свернуть конструктор' : '➕ Свой джем';
+  openBtn.title = 'Собери прогрессию песни, которую учишь, — и джемь поверх неё с подсветкой тонов';
+  openBtn.onclick = () => { mjOpen = !mjOpen; renderMyJams(); };
+  wrap.appendChild(openBtn);
+  if (!mjOpen) return;
+
+  const box = document.createElement('div');
+  box.className = 'prog-item';
+
+  const hint = document.createElement('div');
+  hint.className = 'prog-hint';
+  hint.style.marginBottom = '10px';
+  hint.textContent = '💡 Выбери качество, тапай ноты — аккорды добавятся в цепочку. Тап по аккорду в цепочке убирает его.';
+  box.appendChild(hint);
+
+  // качество следующего аккорда
+  const qRow = document.createElement('div');
+  qRow.className = 'mode-toggle';
+  qRow.style.marginBottom = '10px';
+  MJ_QUALITIES.forEach(qq => {
+    const b = document.createElement('button');
+    b.className = 'mode-btn' + (mjQ === qq.id ? ' active-timbre' : '');
+    b.textContent = qq.label;
+    b.onclick = () => { mjQ = qq.id; renderMyJams(); };
+    qRow.appendChild(b);
+  });
+  box.appendChild(qRow);
+
+  // корни
+  const rootRow = document.createElement('div');
+  rootRow.className = 'key-grid';
+  rootRow.style.marginBottom = '4px';
+  CHROMATIC.forEach((n, pcIdx) => {
+    const b = document.createElement('button');
+    b.className = 'key-btn';
+    b.textContent = n + (mjQ === 'i' ? 'm' : mjQ === 'i7' ? 'm7' : mjQ === 'I7' ? '7' : '');
+    b.onclick = () => { mjChords.push({ d: pcIdx, q: mjQ }); renderMyJams(); };
+    rootRow.appendChild(b);
+  });
+  box.appendChild(rootRow);
+
+  // цепочка черновика
+  const chain = document.createElement('div');
+  chain.className = 'prog-chords';
+  chain.style.marginBottom = '10px';
+  if (!mjChords.length) {
+    const empty = document.createElement('span');
+    empty.style.cssText = 'font-size:11px;color:var(--muted);';
+    empty.textContent = 'Цепочка пуста — добавь минимум 2 аккорда';
+    chain.appendChild(empty);
+  }
+  mjChords.forEach((c, ci) => {
+    if (ci > 0) {
+      const arr = document.createElement('span');
+      arr.className = 'prog-arrow';
+      arr.textContent = '›';
+      chain.appendChild(arr);
+    }
+    const pill = document.createElement('button');
+    pill.className = 'chord-pill ' + chordClass(c.q);
+    pill.textContent = chordLabel(c, 0);
+    pill.title = 'Убрать аккорд';
+    pill.onclick = () => { mjChords.splice(ci, 1); renderMyJams(); };
+    chain.appendChild(pill);
+  });
+  box.appendChild(chain);
+
+  // жанр (определяет бои и стиль джема)
+  const gRow = document.createElement('div');
+  gRow.className = 'genre-filter';
+  GENRES.filter(g => g.id !== 'all').forEach(g => {
+    const b = document.createElement('button');
+    b.className = 'genre-btn' + (mjGenre === g.id ? ' active' : '');
+    b.textContent = g.label;
+    b.onclick = () => { mjGenre = g.id; renderMyJams(); };
+    gRow.appendChild(b);
+  });
+  box.appendChild(gRow);
+
+  // действия
+  const act = document.createElement('div');
+  act.className = 'rp-row';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'ro-btn' + (mjChords.length >= 2 ? ' on' : '');
+  saveBtn.textContent = '💾 Сохранить джем';
+  saveBtn.disabled = mjChords.length < 2;
+  saveBtn.onclick = () => {
+    myJams.push({ name: mjAutoName(mjChords), genre: mjGenre, chords: mjChords.slice() });
+    saveMyJams();
+    mjChords = [];
+    mjOpen = false;
+    renderMyJams();
+  };
+  act.appendChild(saveBtn);
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'ro-btn';
+  clearBtn.textContent = 'Очистить';
+  clearBtn.onclick = () => { mjChords = []; renderMyJams(); };
+  act.appendChild(clearBtn);
+  box.appendChild(act);
+
+  wrap.appendChild(box);
 }
 
 // ═══ TAB SWITCHING ════════════════════════════════
@@ -2616,9 +2969,11 @@ function render() {
   renderLicks();
   renderGenreFilter();
   renderProgressions();
+  renderMyJams();
 }
 
 loadState();
+loadMyJams();
 render();
 syncNoteLabelButtons();
 if (activeTab === 'chords') switchTab('chords');
