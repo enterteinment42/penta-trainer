@@ -674,37 +674,66 @@ function setTimbre(t) {
   if (d) d.className = 'mode-btn' + (t === 'distortion' ? ' active-timbre' : '');
 }
 
-// Кривая овердрайва: плавная tanh-сатурация (musical, без цифрового хард-клипа)
-let DIST_CURVE = null;
-function distCurve() {
-  if (DIST_CURVE) return DIST_CURVE;
-  const n = 2048, c = new Float32Array(n), k = 8;
+// Кривая овердрайва: плавная tanh-сатурация (musical, без цифрового хард-клипа).
+// k — жёсткость: меньше = мягче компрессия, больше = плотнее перегруз
+const DIST_CURVES = new Map();
+function distCurve(k = 8) {
+  if (DIST_CURVES.has(k)) return DIST_CURVES.get(k);
+  const n = 2048, c = new Float32Array(n);
   const norm = Math.tanh(k);
   for (let i = 0; i < n; i++) {
     const x = (i * 2) / n - 1;
     c[i] = Math.tanh(k * x) / norm;
   }
-  DIST_CURVE = c; return c;
+  DIST_CURVES.set(k, c); return c;
+}
+
+// Синтезированный импульс гитарного кабинета (без внешних файлов): прямой импульс +
+// короткий затухающий шумовой хвост, прогнанный через спад верха ~4.5кГц (2-й порядок,
+// динамик не воспроизводит выше) и срез инфраниза ~90Гц. Свёртка с ним красит перегруз
+// в «микрофон у динамика» вместо синтетического жужжания в лоб.
+let cabIRBuf = null;
+function cabIR(ctx) {
+  if (cabIRBuf && cabIRBuf.sampleRate === ctx.sampleRate) return cabIRBuf;
+  const sr = ctx.sampleRate, len = Math.floor(sr * 0.05);
+  cabIRBuf = ctx.createBuffer(1, len, sr);
+  const d = cabIRBuf.getChannelData(0);
+  const aLp = 1 - Math.exp(-2 * Math.PI * 4500 / sr);
+  const aHp = 1 - Math.exp(-2 * Math.PI * 90 / sr);
+  let lp = 0, lp2 = 0, hpMem = 0;
+  for (let i = 0; i < len; i++) {
+    const x = (i === 0 ? 1 : 0) + (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.008)) * 0.6;
+    lp    += aLp * (x - lp);
+    lp2   += aLp * (lp - lp2);
+    hpMem += aHp * (lp2 - hpMem);
+    d[i] = lp2 - hpMem;
+  }
+  return cabIRBuf;
 }
 
 // ── ОБЩИЙ канал перегруза (один на всё приложение) ──
 // Все дисторшн-голоса суммируются и перегружаются ВМЕСТЕ, как струны в усилителе:
-// 1 WaveShaper вместо одного на ноту → нет перегрузки аудиопотока (треска и лагов),
+// общие вейвшейперы вместо своих на ноту → нет перегрузки аудиопотока (треска и лагов),
 // плюс настоящая интермодуляция струн — характер дисторшн-аккордов.
+// Цепь: hp → мягкий каскад 1 → срез межкаскадного физза → плотный каскад 2 → кабинет (IR) → mid EQ
 let distBus = null;
 function getDistBus() {
   const ctx = getCtx();
   if (!distBus) {
     const inp    = ctx.createGain();   inp.gain.value = 1;
-    // Перед перегрузом убираем физзовые верха пилы (но не так агрессивно, как для KS)
-    const preLp  = ctx.createBiquadFilter(); preLp.type = 'lowpass'; preLp.frequency.value = 2800; preLp.Q.value = 0.5;
-    const hp     = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 80;   // ниже срез = больше тела
-    const shaper = ctx.createWaveShaper();   shaper.curve = distCurve(); shaper.oversample = '2x';
-    // гитарный кабинет: спад верха + резонанс на срезе, акцент в нижней середине («жир»)
-    const cab    = ctx.createBiquadFilter(); cab.type = 'lowpass'; cab.frequency.value = 2700; cab.Q.value = 1.1;
-    const mid    = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 600; mid.Q.value = 0.6; mid.gain.value = 4.5;
-    const post   = ctx.createGain();   post.gain.value = 0.2;  // уровень после клиппинга
-    inp.connect(preLp); preLp.connect(hp); hp.connect(shaper); shaper.connect(cab); cab.connect(mid); mid.connect(post);
+    const hp     = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 75; // ниже срез = больше тела
+    const preLp  = ctx.createBiquadFilter(); preLp.type = 'lowpass'; preLp.frequency.value = 6000; preLp.Q.value = 0.5; // смягчить шумовую атаку KS
+    const drive1 = ctx.createGain();   drive1.gain.value = 2.2;
+    const st1    = ctx.createWaveShaper(); st1.curve = distCurve(3); st1.oversample = '2x'; // мягкая компрессия
+    const midLp  = ctx.createBiquadFilter(); midLp.type = 'lowpass'; midLp.frequency.value = 4200; midLp.Q.value = 0.5;
+    const drive2 = ctx.createGain();   drive2.gain.value = 1.6;
+    const st2    = ctx.createWaveShaper(); st2.curve = distCurve(6); st2.oversample = '2x'; // плотный перегруз
+    const cab    = ctx.createConvolver(); cab.buffer = cabIR(ctx); cab.normalize = true;    // кабинет
+    const mid    = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 550; mid.Q.value = 0.7; mid.gain.value = 3.5;
+    const post   = ctx.createGain();   post.gain.value = 0.62; // уровень после кабинета (калиброван по RMS старой цепи)
+    inp.connect(hp); hp.connect(preLp); preLp.connect(drive1); drive1.connect(st1);
+    st1.connect(midLp); midLp.connect(drive2); drive2.connect(st2);
+    st2.connect(cab); cab.connect(mid); mid.connect(post);
     post.connect(getMaster());
     distBus = inp;
   }
@@ -797,28 +826,31 @@ function makeVoice(midi, sustain, opts = {}) {
     return stop;
 
   } else {
-    // Дисторшн: пилообразный осциллятор (спектр постоянно богат → «жужжащий» сустейн гитары,
-    // не тускнеет как фортепиано) + щелчок медиатора + гитарная огибающая. Через общий перегруз-канал.
+    // Дисторшн поверх Karplus-Strong: в перегруз идёт настоящая струна (атака медиатора,
+    // живое затухание гармоник, интермодуляция реальных спектров в общем бусе), а не пила.
+    // Второй голос слегка расстроен — медленные биения, как у двух струн/двойного трека.
+    // Затухание медленнее акустики (0.9985): сатурация дожимает хвост в «поющий» сустейн.
     const bus = getDistBus();
-    const osc = ctx.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = freq;
-    const sub = ctx.createOscillator(); sub.type = 'sawtooth'; sub.frequency.value = freq / 2; // октава вниз = «жир»/тело
-    const subG = ctx.createGain(); subG.gain.value = 0.5;
+    const dur = opts.dur !== undefined ? Math.max(0.3, opts.dur) : (sustain ? 4.5 : 2.6);
+    const buf = ksBufferCached(ctx, freq, dur, 0.9985);
+    const src  = ctx.createBufferSource(); src.buffer = buf;
+    const src2 = ctx.createBufferSource(); src2.buffer = buf; src2.detune.value = 6;
+    const g2  = ctx.createGain(); g2.gain.value = 0.7;
     const env = ctx.createGain();
-    const peak       = 0.95 * vel;
-    const sustainLvl = 0.60 * vel;
-    const decayT = opts.dur !== undefined ? Math.max(0.18, opts.dur) : (sustain ? 4.5 : 2.3);
-    env.gain.setValueAtTime(0.0001, when);
-    env.gain.linearRampToValueAtTime(peak, when + 0.004);            // быстрая атака
-    env.gain.exponentialRampToValueAtTime(Math.max(0.001, sustainLvl), when + 0.10); // спад на сустейн
-    env.gain.exponentialRampToValueAtTime(0.0001, when + decayT);    // долгое затухание
+    const lvl = 0.9 * vel;
+    env.gain.setValueAtTime(lvl * 1.35, when);                    // «укус» атаки: сильнее вдавить в перегруз
+    env.gain.exponentialRampToValueAtTime(lvl * 0.6, when + 0.3); // спад к сустейну
     // Прим.: яркость ап-штриха (opts.bright) НЕ применяем в дисторшне — все голоса идут в общий
     // перегруз-бус, буст верхов ДО вейвшейпера даёт физз/грязь. Разница ап/даун — по громкости.
-    osc.connect(env); sub.connect(subG); subG.connect(env); env.connect(bus);
-    if (opts.bend) { // подтяжка/слайд — как в acoustic-ветке; detune в центах масштабируется на суб-октаву сам
+    src.connect(env); src2.connect(g2); g2.connect(env); env.connect(bus);
+    if (opts.bend) { // подтяжка/слайд — плавный подъём высоты, у расстроенного голоса — от его базы
       const bAt = when + (opts.bend.at || 0.08);
-      [osc, sub].forEach(o => { o.detune.setValueAtTime(0, bAt); o.detune.linearRampToValueAtTime(opts.bend.cents, bAt + (opts.bend.dur || 0.15)); });
+      [[src, 0], [src2, 6]].forEach(([o, base]) => {
+        o.detune.setValueAtTime(base, bAt);
+        o.detune.linearRampToValueAtTime(base + opts.bend.cents, bAt + (opts.bend.dur || 0.15));
+      });
     }
-    osc.start(when); sub.start(when);
+    src.start(when); src2.start(when);
 
     // щелчок медиатора — короткий шумовой транзиент мимо перегруза (чтобы остался чётким)
     const pickLen = Math.floor(ctx.sampleRate * 0.010);
@@ -827,15 +859,10 @@ function makeVoice(midi, sustain, opts = {}) {
     for (let i = 0; i < pickLen; i++) pd[i] = (Math.random()*2-1) * (1 - i/pickLen);
     const pick = ctx.createBufferSource(); pick.buffer = pbuf;
     const pickBp = ctx.createBiquadFilter(); pickBp.type = 'bandpass'; pickBp.frequency.value = 2400; pickBp.Q.value = 0.7;
-    const pickG = ctx.createGain(); pickG.gain.value = 0.22 * vel;
+    const pickG = ctx.createGain(); pickG.gain.value = 0.33 * vel;
     pick.connect(pickBp); pickBp.connect(pickG); pickG.connect(dest);
     pick.start(when);
 
-    let stopAt = null;
-    if (!sustain) {
-      stopAt = when + decayT + 0.1;
-      try { osc.stop(stopAt); sub.stop(stopAt); } catch(e) {}
-    }
     const stop = () => {
       if (!activeStops.has(stop)) return;
       activeStops.delete(stop);
@@ -843,8 +870,7 @@ function makeVoice(midi, sustain, opts = {}) {
       env.gain.cancelScheduledValues(t);
       env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), t);
       env.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-      const st = stopAt !== null ? Math.min(stopAt, t + 0.18) : t + 0.18;
-      try { osc.stop(st); sub.stop(st); } catch(e) {}
+      try { src.stop(t + 0.18); src2.stop(t + 0.18); } catch(e) {}
     };
     activeStops.add(stop);
     return stop;
