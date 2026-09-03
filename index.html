@@ -687,6 +687,10 @@ function setMasterVolume(v) {
 
 // ── Тембр: 'acoustic' (щипок струны, Karplus-Strong) | 'distortion' (электрогитара) ──
 let timbre = 'acoustic';
+// Настройки дисторшна как рок-гитары (подобраны замерами полифонии и провалов между ударами)
+const DIST_VOICE_GAIN = 0.18; // уровень голоса на входе общего перегруза — иначе аккорд клиппит в стену
+const DIST_RELEASE    = 0.09; // затухание ноты после её длительности
+const PALM_MUTE_DUR   = 0.19; // палм-мьют в бое: ладонь у бриджа глушит струну
 function setTimbre(t) {
   timbre = t;
   try { saveState(); } catch(e) {} // saveState может быть ещё не объявлен при первом вызове
@@ -752,7 +756,7 @@ function getDistBus() {
     const st2    = ctx.createWaveShaper(); st2.curve = distCurve(6); st2.oversample = '2x'; // плотный перегруз
     const cab    = ctx.createConvolver(); cab.buffer = cabIR(ctx); cab.normalize = true;    // кабинет
     const mid    = ctx.createBiquadFilter(); mid.type = 'peaking'; mid.frequency.value = 550; mid.Q.value = 0.7; mid.gain.value = 3.5;
-    const post   = ctx.createGain();   post.gain.value = 0.62; // уровень после кабинета (калиброван по RMS старой цепи)
+    const post   = ctx.createGain();   post.gain.value = 0.9; // выход кабинета: калиброван по RMS к акустике (замер записью реального выхода)
     inp.connect(hp); hp.connect(preLp); preLp.connect(drive1); drive1.connect(st1);
     st1.connect(midLp); midLp.connect(drive2); drive2.connect(st2);
     st2.connect(cab); cab.connect(mid); mid.connect(post);
@@ -763,10 +767,12 @@ function getDistBus() {
 }
 
 const activeStops = new Set();
+const ringingStrings = new Map();  // midi → звучащий дисторшн-голос: новый удар глушит предыдущий
 function stopAllNotes() {
   // Гасим все звучащие ноты — защита от «зависшего» гула при ре-рендере/смене вкладки
   if (typeof stopPlayer === 'function' && player.running) stopPlayer();
   Array.from(activeStops).forEach(stop => stop());
+  ringingStrings.clear();
   document.querySelectorAll('.nb.held').forEach(el => el.classList.remove('held'));
   document.querySelectorAll('.chord-pill.active').forEach(el => el.classList.remove('active'));
 }
@@ -853,15 +859,21 @@ function makeVoice(midi, sustain, opts = {}) {
     // Второй голос слегка расстроен — медленные биения, как у двух струн/двойного трека.
     // Затухание медленнее акустики (0.9985): сатурация дожимает хвост в «поющий» сустейн.
     const bus = getDistBus();
-    const dur = opts.dur !== undefined ? Math.max(0.3, opts.dur) : (sustain ? 4.5 : 2.6);
-    const buf = ksBufferCached(ctx, freq, dur, 0.9985);
+    const dur = opts.dur !== undefined ? Math.max(0.12, opts.dur) : (sustain ? 4.5 : 2.6);
+    // буфер длиннее ноты: иначе звук обрывается его концом, вместо того чтобы затухнуть
+    const buf = ksBufferCached(ctx, freq, dur + DIST_RELEASE + 0.1, 0.9985);
     const src  = ctx.createBufferSource(); src.buffer = buf;
     const src2 = ctx.createBufferSource(); src2.buffer = buf; src2.detune.value = 6;
     const g2  = ctx.createGain(); g2.gain.value = 0.7;
     const env = ctx.createGain();
-    const lvl = 0.9 * vel;
+    // Уровень входа в ОБЩИЙ перегруз-бус. Голоса суммируются до сатурации, поэтому громкий
+    // голос × полифония = тотальный клип: динамика умирает, аккорд превращается в стену.
+    // 0.18 держит сатурацию в рабочем режиме даже когда звучит весь аккорд.
+    const lvl = DIST_VOICE_GAIN * vel;
     env.gain.setValueAtTime(lvl * 1.35, when);                    // «укус» атаки: сильнее вдавить в перегруз
-    env.gain.exponentialRampToValueAtTime(lvl * 0.6, when + 0.3); // спад к сустейну
+    env.gain.exponentialRampToValueAtTime(lvl * 0.6, when + Math.min(0.3, dur * 0.6)); // спад к сустейну
+    env.gain.setValueAtTime(lvl * 0.6, when + dur);               // нота кончается по своей длительности,
+    env.gain.exponentialRampToValueAtTime(0.0001, when + dur + DIST_RELEASE); // а не обрывается буфером
     // Прим.: яркость ап-штриха (opts.bright) НЕ применяем в дисторшне — все голоса идут в общий
     // перегруз-бус, буст верхов ДО вейвшейпера даёт физз/грязь. Разница ап/даун — по громкости.
     src.connect(env); src2.connect(g2); g2.connect(env); env.connect(bus);
@@ -873,6 +885,8 @@ function makeVoice(midi, sustain, opts = {}) {
       });
     }
     src.start(when); src2.start(when);
+    const srcEnd = when + dur + DIST_RELEASE + 0.05;
+    try { src.stop(srcEnd); src2.stop(srcEnd); } catch(e) {}
 
     // щелчок медиатора — короткий шумовой транзиент мимо перегруза (чтобы остался чётким)
     const pickLen = Math.floor(ctx.sampleRate * 0.010);
@@ -885,9 +899,26 @@ function makeVoice(midi, sustain, opts = {}) {
     pick.connect(pickBp); pickBp.connect(pickG); pickG.connect(dest);
     pick.start(when);
 
+    // Глушение струны: новый удар медиатора по той же струне обрывает предыдущий звук.
+    // Без этого ноты копятся до конца такта — на роке это под три десятка голосов
+    // в одном перегруз-бусе, то есть стена вместо ритмического рисунка.
+    const muteFrom = (t) => {
+      try {
+        if (env.gain.cancelAndHoldAtTime) env.gain.cancelAndHoldAtTime(t);
+        else { env.gain.cancelScheduledValues(t); env.gain.setValueAtTime(lvl * 0.6, t); }
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+        src.stop(t + 0.05); src2.stop(t + 0.05);
+      } catch(e) {}
+    };
+    const prevOnString = ringingStrings.get(midi);
+    if (prevOnString && prevOnString.when < when) prevOnString.muteFrom(when);
+    const entry = { when, muteFrom };
+    ringingStrings.set(midi, entry);
+
     const stop = () => {
       if (!activeStops.has(stop)) return;
       activeStops.delete(stop);
+      if (ringingStrings.get(midi) === entry) ringingStrings.delete(midi);
       const t = ctx.currentTime;
       env.gain.cancelScheduledValues(t);
       env.gain.setValueAtTime(Math.max(0.0001, env.gain.value), t);
@@ -1656,8 +1687,10 @@ const RHYTHMS = {
     { name:'12/8 блюз',    bpm:60,  grid:12, swing:0.5,  steps:[{d:'D',a:1},{d:'U'},{d:'D'},{d:'D',a:1},{d:'U'},{d:'D'},{d:'D',a:1},{d:'U'},{d:'D'},{d:'D',a:1},{d:'U'},{d:'D'}] },
   ],
   rock: [
-    { name:'Восьмые',      bpm:120, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'}] },
+    // «Драйв» первым: он играет по умолчанию при запуске рок-прогрессии, а ровные восьмые
+    // рисунка не дают — под них не слышно ни доли, ни смены аккорда
     { name:'Драйв',        bpm:132, grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'U'},null,{d:'U'},{d:'D',a:1},{d:'U'}] },
+    { name:'Восьмые',      bpm:120, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D'},{d:'D'}] },
     { name:'Панк',         bpm:168, grid:8,  swing:0.5,  steps:[{d:'D',a:1},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D',a:1},{d:'D'},{d:'D',a:1},{d:'D'}] },
     { name:'Галоп',        bpm:112, grid:16, swing:0.5,  steps:[{d:'D',a:1},null,{d:'D'},{d:'D'},{d:'D'},null,{d:'D'},{d:'D'},{d:'D',a:1},null,{d:'D'},{d:'D'},{d:'D'},null,{d:'D'},{d:'D'}] },
     { name:'Хаф-тайм',     bpm:86,  grid:8,  swing:0.5,  steps:[{d:'D',a:1},null,null,{d:'U'},{d:'X'},null,{d:'D'},{d:'U'}] },
@@ -1733,6 +1766,19 @@ function chordNotes(rootMidi, q) {
   const notes = [rootMidi, rootMidi+third, rootMidi+7, rootMidi+12];
   if (q.includes('7')) notes.push(rootMidi + 10);
   return notes.sort((a,b)=>a-b);
+}
+
+// Ноты, которые БЕРЁТ БОЙ (звук аккомпанемента). Отличается от chordNotes,
+// которая остаётся источником тонов для подсветки грифа — там нужен полный аккорд.
+// В дисторшне играется пауэр-аккорд на низких струнах: терция через перегруз даёт
+// интермодуляционную грязь (её слышно как «электропианино»), поэтому рок её не берёт.
+// Наклонение аккорда остаётся на подсветке грифа и на басу ритм-секции.
+function strumNotes(rootMidi, q) {
+  if (timbre !== 'distortion') return chordNotes(rootMidi, q);
+  let r = rootMidi - 12;          // рок звучит октавой ниже, на низких струнах
+  if (r < 38) r += 12;
+  if (r > 49) r -= 12;
+  return [r, r + 7, r + 12];      // тоника + квинта + октава
 }
 
 // ═══ PROGRESSION PLAYER ═══════════════════════════
@@ -1911,7 +1957,7 @@ function scheduleBar(barIdx, barStart) {
   const stepLen = barLen / r.grid;
   const ch    = player.prog.degrees[jamChordIdx(barIdx)];
   const rootMidi = degreeRootMidi(player.ri, ch.d);
-  const notes = chordNotes(rootMidi, ch.q);
+  const notes = strumNotes(rootMidi, ch.q);   // подсветка грифа берёт полный аккорд отдельно
   const pairSpan = stepLen * 2;
 
   if (player.jam && barIdx < JAM_INTRO_BARS) {
@@ -1925,9 +1971,12 @@ function scheduleBar(barIdx, barStart) {
       let t;
       if (i % 2 === 0) t = barStart + (i/2) * pairSpan;
       else             t = barStart + ((i-1)/2) * pairSpan + pairSpan * r.swing; // свинг смещает офф-бит
-      // длительность ноты: до конца такта, но не больше 1.6с; скэнк — короткий стаккато
+      // длительность ноты: до конца такта, но не больше 1.6с; скэнк — короткий стаккато;
+      // дисторшн — палм-мьют: ладонь у бриджа глушит струну, ноты не наслаиваются в стену
       const isSkank = player.prog.genre === 'reggae';
-      const noteDur = isSkank ? 0.22 : Math.min(1.6, barStart + barLen - t + 0.1);
+      const noteDur = isSkank ? 0.22
+        : timbre === 'distortion' ? Math.min(PALM_MUTE_DUR, barStart + barLen - t + 0.1)
+        : Math.min(1.6, barStart + barLen - t + 0.1);
       playStrumStroke(notes, t, step, noteDur);
       player.events.push({ time: t, stepIdx: i, barIdx });
     });
