@@ -57,6 +57,14 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   .main { padding:20px 28px; }
   .lbl { font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
 
+  .jump-cta {
+    display:block; width:100%; margin-bottom:22px; padding:13px 16px;
+    background:var(--accent); color:#241a03; border:none; border-radius:8px;
+    font-family:inherit; font-size:14px; font-weight:700; letter-spacing:.5px;
+    cursor:pointer; box-shadow:0 4px 14px rgba(232,200,74,.3);
+  }
+  .jump-cta:active { transform:translateY(1px); }
+
   .key-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:20px; }
   .key-btn { background:var(--panel); border:1px solid #2a2830; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; padding:6px 12px; cursor:pointer; transition:all .15s; border-radius:2px; }
   .key-btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -287,7 +295,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   }
 
   /* ── CHORD PROGRESSIONS ── */
-  .prog-section { margin-top:28px; border-top:1px solid #1e1e28; padding-top:20px; }
+  .prog-section { margin-top:28px; border-top:1px solid #1e1e28; padding-top:20px; scroll-margin-top:71px; }
   .prog-section .lbl { margin-bottom:14px; }
 
   .prog-list { display:flex; flex-direction:column; gap:10px; }
@@ -452,6 +460,8 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
 <!-- TAB: PENTATONIC -->
 <div class="tab-page active" id="tab-penta">
 <div class="main">
+  <button class="jump-cta" onclick="scrollToProgressions()">🎯 Играть под аккорды</button>
+
   <div class="lbl">1. Выбери тональность</div>
   <div class="mode-toggle">
     <button class="mode-btn" id="btnMin" onclick="setMode('minor')">MINOR</button>
@@ -515,7 +525,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   </div>
 
   <!-- CHORD PROGRESSIONS -->
-  <div class="prog-section">
+  <div class="prog-section" id="progSection">
     <div class="lbl">5. Аккордовые прогрессии для джема</div>
     <div class="myjams" id="myJams"></div>
     <div class="genre-filter" id="genreFilter"></div>
@@ -3174,6 +3184,11 @@ function switchTab(tab) {
   });
   if (tab === 'chords') renderChordExplorer();
   if (tab === 'gamma')  renderGamma();
+}
+
+function scrollToProgressions() {
+  const el = document.getElementById('progSection');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ═══ CHORD EXPLORER ═══════════════════════════════
