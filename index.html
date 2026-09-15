@@ -169,7 +169,12 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   .info span { color:var(--text); }
   .info .nl { color:var(--accent); font-weight:600; letter-spacing:2px; }
 
-  .fb-wrap { overflow-x:auto; padding-bottom:30px; }
+  .fb-wrap { overflow-x:auto; padding-bottom:30px; position:relative; }
+  .fb-fade { position:absolute; top:0; bottom:30px; width:28px; pointer-events:none;
+    opacity:0; transition:opacity .15s; z-index:5; }
+  .fb-fade.show { opacity:1; }
+  .fb-fade-l { left:0;  background:linear-gradient(90deg,  var(--wood), transparent); }
+  .fb-fade-r { right:0; background:linear-gradient(270deg, var(--wood), transparent); }
 
   /* fretboard container — position:relative for SVG overlay */
   .fretboard {
@@ -474,8 +479,10 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
       <button class="mode-btn"               id="btnNlInt"   onclick="setNoteLabels('intervals')">ИНТЕРВАЛЫ</button>
     </div>
   </div>
-  <div class="fb-wrap">
+  <div class="fb-wrap" id="fbWrapPenta">
     <div class="fretboard" id="fb"></div>
+    <div class="fb-fade fb-fade-l"></div>
+    <div class="fb-fade fb-fade-r"></div>
   </div>
 
   <div class="legend">
@@ -560,14 +567,20 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
     <div class="box-sel" id="gBoxSel"></div>
   </div>
 
+  <div class="info">
+    <div>Сейчас: <span id="gPos">—</span></div>
+  </div>
+
   <div class="nl-row">
     <div class="mode-toggle">
       <button class="mode-btn active-timbre" id="btnNlNotesG" onclick="setNoteLabels('notes')">НОТЫ</button>
       <button class="mode-btn"               id="btnNlIntG"   onclick="setNoteLabels('intervals')">ИНТЕРВАЛЫ</button>
     </div>
   </div>
-  <div class="fb-wrap">
+  <div class="fb-wrap" id="fbWrapGamma">
     <div class="fretboard" id="fbGamma"></div>
+    <div class="fb-fade fb-fade-l"></div>
+    <div class="fb-fade fb-fade-r"></div>
   </div>
 
   <div class="legend">
@@ -722,6 +735,51 @@ function getLinearFrets(key, scaleObj) {
     }
   }
   return out;
+}
+
+// Диапазон ладов текущего паттерна (набора "струна-лад") — для подписи "где мы"
+// и для авто-прокрутки грифа. Не завязан на бокс/лад — просто min/max по факту.
+function activeFretRange(activeSet) {
+  let min = Infinity, max = -Infinity;
+  activeSet.forEach(k => {
+    const f = +k.split('-')[1];
+    if (f < min) min = f;
+    if (f > max) max = f;
+  });
+  return isFinite(min) ? { min, max } : null;
+}
+
+// Прокручивает гриф так, чтобы текущий паттерн был виден (центрирует, если помещается
+// в экран; иначе прижимает к левому краю с отступом — актуально для ALL/линейного режима,
+// которые шире экрана телефона). Плюс показывает/прячет градиенты-подсказки по краям.
+function scrollFretboardToRange(wrapId, fbId, range) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const fh = document.querySelector(`#${fbId} .fh`);
+  if (!fh || !range) { wrap.scrollLeft = 0; updateFbFade(wrapId); return; }
+  const startCell = fh.children[Math.max(0, range.min) + 1];
+  const endCell   = fh.children[Math.min(MAX_FRET, range.max) + 1];
+  if (!startCell || !endCell) { wrap.scrollLeft = 0; updateFbFade(wrapId); return; }
+  const startX = startCell.offsetLeft;
+  const endX   = endCell.offsetLeft + endCell.offsetWidth;
+  const spanW  = endX - startX;
+  const PAD    = 24;
+  const target = (spanW + PAD * 2 <= wrap.clientWidth)
+    ? startX - (wrap.clientWidth - spanW) / 2
+    : startX - PAD;
+  wrap.scrollLeft = Math.max(0, Math.min(target, wrap.scrollWidth - wrap.clientWidth));
+  updateFbFade(wrapId);
+}
+
+function updateFbFade(wrapId) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const l = wrap.querySelector('.fb-fade-l');
+  const r = wrap.querySelector('.fb-fade-r');
+  if (!l || !r) return;
+  const maxScroll = wrap.scrollWidth - wrap.clientWidth;
+  l.classList.toggle('show', wrap.scrollLeft > 4);
+  r.classList.toggle('show', wrap.scrollLeft < maxScroll - 4);
 }
 
 // ═══ AUDIO ════════════════════════════════════════
@@ -1371,7 +1429,9 @@ function renderInfo() {
   } else {
     iNotesEl.textContent = notes.join(' · ');
   }
-  document.getElementById('iBox').textContent   = selBox === 'all' ? 'Все боксы' : `Бокс ${selBox}`;
+  const range = activeFretRange(getActiveFrets(selKey, selBox, selMode));
+  const rangeTxt = range ? ` · лады ${range.min}–${range.max}` : '';
+  document.getElementById('iBox').textContent = (selBox === 'all' ? 'Все боксы' : `Бокс ${selBox}`) + rangeTxt;
 
   buildBoxLegend('boxLeg', selBox);
 }
@@ -1417,6 +1477,12 @@ function renderGammaInfo() {
   const s = SCALES[gLad];
   buildScaleInfoCard('gInfo', gKey, s, s.base);
   buildBoxLegend('gBoxLeg', gView === 'linear' ? 'linear' : gBox);
+
+  const active = gView === 'linear' ? getLinearFrets(gKey, s) : getActiveFrets(gKey, gBox, s.base);
+  const range = activeFretRange(active);
+  const rangeTxt = range ? `лады ${range.min}–${range.max}` : '—';
+  const posLabel = gView === 'linear' ? 'Линейно' : (gBox === 'all' ? 'Все боксы' : `Бокс ${gBox}`);
+  document.getElementById('gPos').textContent = `${posLabel} · ${rangeTxt}`;
 }
 
 function setGView(v) {
@@ -1578,6 +1644,7 @@ function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_) {
 
 function renderFretboard() {
   cellMap = buildFretboard('fb', selKey, selMode, selBox, selScale ? SCALES[selScale] : null, noteLabels, blueNoteOn);
+  scrollFretboardToRange('fbWrapPenta', 'fb', activeFretRange(getActiveFrets(selKey, selBox, selMode)));
   // — SVG box overlays (ALL mode only) —
   if (selBox === 'all') {
     // use setTimeout so layout is fully calculated first
@@ -1589,6 +1656,8 @@ function renderGammaFretboard() {
   const s = SCALES[gLad];
   const boxParam = gView === 'linear' ? 'linear' : gBox;
   gCellMap = buildFretboard('fbGamma', gKey, s.base, boxParam, s, noteLabels, false);
+  const gActive = gView === 'linear' ? getLinearFrets(gKey, s) : getActiveFrets(gKey, gBox, s.base);
+  scrollFretboardToRange('fbWrapGamma', 'fbGamma', activeFretRange(gActive));
   // Читаем gKey/gLad/gView/gBox/gCellMap заново при срабатывании таймера (не захватываем в замыкание) —
   // иначе быстрый повторный клик за эти 30мс может нарисовать рамку старого лада (или бокса поверх
   // уже переключённого линейного грифа) поверх нового грифа.
@@ -1681,7 +1750,7 @@ function scheduleBoxRedraw() {
     const fb = document.getElementById('fb');
     if (selBox === 'all' && fb && fb.offsetWidth > 0) drawBoxOverlay('fb', selKey, selMode, cellMap);
     const fbG = document.getElementById('fbGamma');
-    if (gBox === 'all' && fbG && fbG.offsetWidth > 0) drawBoxOverlay('fbGamma', gKey, SCALES[gLad].base, gCellMap);
+    if (gView === 'box' && gBox === 'all' && fbG && fbG.offsetWidth > 0) drawBoxOverlay('fbGamma', gKey, SCALES[gLad].base, gCellMap);
   }, 120);
 }
 window.addEventListener('resize', scheduleBoxRedraw);
@@ -3551,6 +3620,11 @@ syncNoteLabelButtons();
 if (activeTab === 'chords') switchTab('chords');
 if (activeTab === 'gamma')  switchTab('gamma');
 const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol;
+
+['fbWrapPenta', 'fbWrapGamma'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('scroll', () => updateFbFade(id), { passive: true });
+});
 
 // Гасим звук при сворачивании вкладки/приложения
 document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAllNotes(); btPause(); } });
