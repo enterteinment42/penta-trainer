@@ -548,8 +548,17 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   <div class="scale-sel" id="gLadSel"></div>
   <div class="scale-info show" id="gInfo"></div>
 
-  <div class="lbl">Выбери бокс</div>
-  <div class="box-sel" id="gBoxSel"></div>
+  <div class="nl-row">
+    <div class="mode-toggle">
+      <button class="mode-btn active-timbre" id="btnGViewBox"    onclick="setGView('box')">БОКСЫ</button>
+      <button class="mode-btn"               id="btnGViewLinear" onclick="setGView('linear')">ЛИНЕЙНО</button>
+    </div>
+  </div>
+
+  <div id="gBoxSection">
+    <div class="lbl">Выбери бокс</div>
+    <div class="box-sel" id="gBoxSel"></div>
+  </div>
 
   <div class="nl-row">
     <div class="mode-toggle">
@@ -686,6 +695,32 @@ function getActiveFrets(key, box, mode = selMode) {
       });
     }
   });
+  return out;
+}
+
+// Линейная аппликатура лада — 3 ноты на струну через весь гриф (не боксы).
+// Начало — тоника на 6-й струне, дальше строго по восходящим ступеням лада;
+// смена струны каждые 3 ноты. Не хардкод: строится из scaleObj.intervals,
+// поэтому одинаково верна для любой тональности и любого из 7 ладов.
+function mod12(x) { return ((x % 12) + 12) % 12; }
+function nextScalePitch(pitch, rootPc, ivsSorted) {
+  const pc  = mod12(pitch - rootPc);
+  const idx = ivsSorted.indexOf(pc);
+  if (idx < ivsSorted.length - 1) return pitch + (ivsSorted[idx + 1] - pc);
+  return pitch + (12 - pc) + ivsSorted[0];
+}
+function getLinearFrets(key, scaleObj) {
+  const rootPc    = CHROMATIC.indexOf(key);
+  const ivsSorted = [...scaleObj.intervals].sort((a, b) => a - b);
+  const fret0     = mod12(rootPc - OPEN_MIDI[0]);
+  const out       = new Set();
+  let pitch = OPEN_MIDI[0] + fret0;
+  for (let mi = 0; mi < 6; mi++) {
+    for (let n = 0; n < 3; n++) {
+      if (!(mi === 0 && n === 0)) pitch = nextScalePitch(pitch, rootPc, ivsSorted);
+      out.add(`${mi}-${pitch - OPEN_MIDI[mi]}`);
+    }
+  }
   return out;
 }
 
@@ -1144,6 +1179,7 @@ let cellMap = {};
 let gKey = 'A';
 let gLad = 'aeolian';
 let gBox = 1;
+let gView = 'box'; // 'box' (5 позиций) | 'linear' (3 ноты на струну через весь гриф)
 let gCellMap = {};
 
 // ── Сохранение состояния между сессиями ──
@@ -1152,7 +1188,7 @@ function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
-      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox,
+      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView,
     }));
   } catch(e) {}
 }
@@ -1171,6 +1207,7 @@ function loadState() {
     if (CHROMATIC.includes(st.gKey)) gKey = st.gKey;
     if (typeof st.gLad === 'string' && SCALES[st.gLad]) gLad = st.gLad;
     if (st.gBox === 'all' || (st.gBox >= 1 && st.gBox <= 5)) gBox = st.gBox;
+    if (['box','linear'].includes(st.gView)) gView = st.gView;
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
     if (typeof st.countInOn === 'boolean') countInOn = st.countInOn;
@@ -1373,12 +1410,24 @@ function renderGammaLadSel() {
 
 function renderGammaBoxSel() {
   buildBoxSel('gBoxSel', gBox, v => { gBox = v; renderGamma(); });
+  document.getElementById('gBoxSection').hidden = gView === 'linear';
 }
 
 function renderGammaInfo() {
   const s = SCALES[gLad];
   buildScaleInfoCard('gInfo', gKey, s, s.base);
-  buildBoxLegend('gBoxLeg', gBox);
+  buildBoxLegend('gBoxLeg', gView === 'linear' ? 'linear' : gBox);
+}
+
+function setGView(v) {
+  gView = v;
+  saveState();
+  renderGamma();
+}
+
+function renderGammaViewToggle() {
+  document.getElementById('btnGViewBox').className    = 'mode-btn' + (gView === 'box'    ? ' active-timbre' : '');
+  document.getElementById('btnGViewLinear').className = 'mode-btn' + (gView === 'linear' ? ' active-timbre' : '');
 }
 
 function renderGamma() {
@@ -1386,6 +1435,7 @@ function renderGamma() {
   saveState();
   renderGammaKeyGrid();
   renderGammaLadSel();
+  renderGammaViewToggle();
   renderGammaBoxSel();
   renderGammaInfo();
   renderGammaFretboard();
@@ -1399,16 +1449,19 @@ function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_) {
   fb.innerHTML = '';
   const cm = {};
 
-  const active = getActiveFrets(key, box, mode);
+  const isLinear = box === 'linear';
+  const active = isLinear ? getLinearFrets(key, scaleObj) : getActiveFrets(key, box, mode);
   const sh = semitones(key);
 
   // — Гамма/лад: добавленные ноты поверх пентатоники —
   const rootPc   = CHROMATIC.indexOf(key);
   const scalePcs = scaleObj ? new Set(scaleObj.intervals.map(i => (rootPc + i) % 12)) : null;
   const charPc   = scaleObj ? (rootPc + scaleObj.char) % 12 : -1;
+  // линейная аппликатура: только пентатонические ступени для подсветки 'penta' (остальное — 'ext'/'char')
+  const linearPentaPcs = isLinear ? new Set(pentaIntervals(scaleObj.base).map(i => (rootPc + i) % 12)) : null;
   // окно для добавленных нот (лад / блюзовая b5): в режиме бокса — границы бокса, в ALL — весь гриф
   let extMin = 0, extMax = MAX_FRET;
-  if ((scaleObj || blueNoteOn_) && box !== 'all') {
+  if ((scaleObj || blueNoteOn_) && box !== 'all' && !isLinear) {
     extMin = Infinity; extMax = -Infinity;
     active.forEach(k => { const f = +k.split('-')[1]; if (f < extMin) extMin = f; if (f > extMax) extMax = f; });
     if (!isFinite(extMin)) { extMin = 0; extMax = MAX_FRET; }
@@ -1470,7 +1523,10 @@ function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_) {
       const pc      = midiVal % 12;
       const inPenta = active.has(`${mi}-${fret}`);
       let kind = null;
-      if (scalePcs) {
+      if (isLinear) {
+        // линейная аппликатура: показываем ровно ноты паттерна, без диапазонного поиска по грифу
+        if (inPenta) kind = (pc === charPc) ? 'char' : (linearPentaPcs.has(pc) ? 'penta' : 'ext');
+      } else if (scalePcs) {
         if (inPenta && scalePcs.has(pc)) kind = 'penta';
         else if (!inPenta && scalePcs.has(pc) && fret >= extMin && fret <= extMax)
           kind = (pc === charPc) ? 'char' : 'ext';
@@ -1531,11 +1587,15 @@ function renderFretboard() {
 
 function renderGammaFretboard() {
   const s = SCALES[gLad];
-  gCellMap = buildFretboard('fbGamma', gKey, s.base, gBox, s, noteLabels, false);
-  // Читаем gKey/gLad/gCellMap заново при срабатывании таймера (не захватываем в замыкание) —
-  // иначе быстрый повторный клик за эти 30мс может нарисовать рамку старого лада поверх нового грифа.
-  if (gBox === 'all') {
-    setTimeout(() => drawBoxOverlay('fbGamma', gKey, SCALES[gLad].base, gCellMap), 30);
+  const boxParam = gView === 'linear' ? 'linear' : gBox;
+  gCellMap = buildFretboard('fbGamma', gKey, s.base, boxParam, s, noteLabels, false);
+  // Читаем gKey/gLad/gView/gBox/gCellMap заново при срабатывании таймера (не захватываем в замыкание) —
+  // иначе быстрый повторный клик за эти 30мс может нарисовать рамку старого лада (или бокса поверх
+  // уже переключённого линейного грифа) поверх нового грифа.
+  if (gView === 'box' && gBox === 'all') {
+    setTimeout(() => {
+      if (gView === 'box' && gBox === 'all') drawBoxOverlay('fbGamma', gKey, SCALES[gLad].base, gCellMap);
+    }, 30);
   }
 }
 
