@@ -65,6 +65,18 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   }
   .jump-cta:active { transform:translateY(1px); }
 
+  .chord-badge {
+    position:sticky; top:var(--tabs-h, 59px); z-index:45;
+    background:var(--panel); border-bottom:2px solid var(--accent2);
+    padding:9px 16px; font-size:12px; color:var(--muted);
+    text-align:center; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+  }
+  .chord-badge[hidden] { display:none; }
+  .chord-badge b { color:var(--text); font-size:14px; }
+  .chord-badge .cb-notes { color:var(--accent2); font-weight:600; }
+  .chord-badge .cb-arrow { color:var(--accent); font-size:11px; letter-spacing:.5px; white-space:nowrap; }
+
   .key-grid { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:20px; }
   .key-btn { background:var(--panel); border:1px solid #2a2830; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; padding:6px 12px; cursor:pointer; transition:all .15s; border-radius:2px; }
   .key-btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -295,7 +307,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   }
 
   /* ── CHORD PROGRESSIONS ── */
-  .prog-section { margin-top:28px; border-top:1px solid #1e1e28; padding-top:20px; scroll-margin-top:71px; }
+  .prog-section { margin-top:28px; border-top:1px solid #1e1e28; padding-top:20px; scroll-margin-top:calc(var(--tabs-h, 59px) + var(--badge-h, 0px) + 12px); }
   .prog-section .lbl { margin-bottom:14px; }
 
   .prog-list { display:flex; flex-direction:column; gap:10px; }
@@ -456,6 +468,13 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   <button class="tab-btn active" onclick="switchTab('penta')">🎸 Пентатоника</button>
   <button class="tab-btn" onclick="switchTab('chords')">🎵 Аккорды</button>
   <button class="tab-btn" onclick="switchTab('gamma')">🎶 Гаммы</button>
+</div>
+<!-- Плавающий бейдж текущего аккорда джем-лупа — закреплён сверху и виден всё время игры лупа,
+     не только когда проскроллено к карточке (так подсветку тонов видно, даже когда гриф вне
+     экрана). Тап скроллит обратно к грифу. -->
+<div class="chord-badge" id="chordBadge" onclick="scrollToFretboard()" hidden>
+  <span id="chordBadgeText">—</span>
+  <span class="cb-arrow">▲ к грифу</span>
 </div>
 <!-- TAB: PENTATONIC -->
 <div class="tab-page active" id="tab-penta">
@@ -1766,6 +1785,15 @@ function scheduleBoxRedraw() {
 window.addEventListener('resize', scheduleBoxRedraw);
 window.addEventListener('orientationchange', scheduleBoxRedraw);
 
+// Высота липкой панели вкладок — единый источник для позиции плавающего бейджа
+// (CSS var --tabs-h) и для scrollToFretboard(), вместо дублирования числа в двух местах.
+function syncTabsHeightVar() {
+  const tabs = document.querySelector('.tabs');
+  if (tabs) document.documentElement.style.setProperty('--tabs-h', tabs.getBoundingClientRect().height + 'px');
+}
+window.addEventListener('resize', syncTabsHeightVar);
+window.addEventListener('orientationchange', syncTabsHeightVar);
+
 // ═══ LICKS / ХОДЫ ═════════════════════════════════
 // Ноты в координатах тональности A (бокс 1 минорной пентатоники = лады 5-8, как AM_BOXES).
 // s — струна (0=низкая E .. 5=высокая E), f — лад в A, t — старт в долях такта, d — длительность в долях.
@@ -2204,6 +2232,38 @@ function stopPlayer() {
   document.querySelectorAll('.rs-step.on').forEach(p => p.classList.remove('on'));
   document.querySelectorAll('.play-btn.playing').forEach(b => { b.classList.remove('playing'); b.textContent = '▶'; });
   highlightChordTones(null);
+  hideChordBadge();
+}
+
+// Плавающий бейдж текущего аккорда — виден, пока управляешь лупом внизу страницы
+// и не видно подсветку тонов на грифе. Тап скроллит обратно к грифу.
+function updateChordBadge(ch, ri, pcs, rootPc) {
+  const badge = document.getElementById('chordBadge');
+  if (!badge) return;
+  const name  = chordLabel(ch, ri);
+  const notes = [rootPc, ...pcs.filter(pc => pc !== rootPc)].map(pc => CHROMATIC[pc]).join(' · ');
+  document.getElementById('chordBadgeText').innerHTML = `<b>${name}</b>: <span class="cb-notes">${notes}</span>`;
+  badge.hidden = false;
+  // Высота бейджа зависит от текста (длинные аккорды типа "C#dim7: C# · E · G · A# · C#"
+  // переносятся на 2 строки) — пересчитываем на КАЖДОЕ обновление, а не только на первый показ,
+  // иначе scroll-margin-top у #progSection останется по высоте первого (более короткого) аккорда.
+  document.documentElement.style.setProperty('--badge-h', badge.getBoundingClientRect().height + 'px');
+}
+function hideChordBadge() {
+  const badge = document.getElementById('chordBadge');
+  if (badge) badge.hidden = true;
+  document.documentElement.style.setProperty('--badge-h', '0px');
+}
+function scrollToFretboard() {
+  if (activeTab !== 'penta') switchTab('penta');
+  const el = document.getElementById('fbWrapPenta');
+  if (!el) return;
+  const tabs   = document.querySelector('.tabs');
+  const badge  = document.getElementById('chordBadge');
+  const offset = (tabs ? tabs.getBoundingClientRect().height : 0)
+    + (badge && !badge.hidden ? badge.getBoundingClientRect().height : 0) + 12;
+  const top = el.getBoundingClientRect().top + window.scrollY - offset;
+  window.scrollTo({ top, behavior: 'smooth' });
 }
 
 // Подсветка тонов звучащего аккорда среди нот пентатоники на грифе
@@ -2323,6 +2383,7 @@ function playerHighlight() {
       const rootPc = (player.ri + ch.d) % 12;
       const pcs = chordNotes(48 + rootPc, ch.q).map(m => m % 12);
       highlightChordTones(pcs, rootPc);
+      updateChordBadge(ch, player.ri, pcs, rootPc);
     }
   }
   player.raf = requestAnimationFrame(playerHighlight);
@@ -3640,6 +3701,7 @@ const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol
   const el = document.getElementById(id);
   if (el) el.addEventListener('scroll', () => updateFbFade(id), { passive: true });
 });
+syncTabsHeightVar();
 
 // Гасим звук при сворачивании вкладки/приложения
 document.addEventListener('visibilitychange', () => { if (document.hidden) { stopAllNotes(); btPause(); } });
