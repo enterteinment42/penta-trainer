@@ -586,13 +586,13 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
 
   <div class="nl-row">
     <div class="mode-toggle">
-      <button class="mode-btn active-timbre" id="btnGViewBox"    onclick="setGView('box')">БОКСЫ</button>
+      <button class="mode-btn active-timbre" id="btnGViewBox"    onclick="setGView('box')">ПОЗИЦИИ</button>
       <button class="mode-btn"               id="btnGViewLinear" onclick="setGView('linear')">ЛИНЕЙНО</button>
     </div>
   </div>
 
   <div id="gBoxSection">
-    <div class="lbl">Выбери бокс</div>
+    <div class="lbl">Выбери позицию</div>
     <div class="box-sel" id="gBoxSel"></div>
   </div>
 
@@ -663,6 +663,8 @@ const AMAJ_BOXES = [
 ];
 
 const BOX_COLORS = ['#e84a6a','#e8a030','#4ab840','#4a90e8','#c04ae8'];
+// 7 позиций лада (3nps) — отдельная палитра от боксов пентатоники (там 5 боксов, тут 7 позиций)
+const SCALE_POS_COLORS = ['#e84a6a','#e8a030','#4ab840','#4a90e8','#c04ae8','#20b2aa','#e85c8a'];
 
 function semitones(key) { return CHROMATIC.indexOf(key) - CHROMATIC.indexOf('A'); }
 
@@ -763,6 +765,47 @@ function getLinearFrets(key, scaleObj) {
       out.add(`${mi}-${pitch - OPEN_MIDI[mi]}`);
     }
   }
+  return out;
+}
+
+// ── 3nps-позиции лада (вкладка «Гаммы», режим БОКСЫ) ──
+// В отличие от боксов пентатоники (AM_BOXES — форма пентатоники + добавленные ноты, 2-3 ноты
+// на струне), это настоящая линейная 3-ноты-на-струне аппликатура: считается напрямую по формуле
+// лада, без привязки к форме пентатоники. degIdx — с какой ступени лада (0=тоника,1=2-я,...)
+// начинается позиция на 6-й струне.
+function get3npsPosition(key, scaleObj, degIdx) {
+  const rootPc    = CHROMATIC.indexOf(key);
+  const ivsSorted = [...scaleObj.intervals].sort((a, b) => a - b);
+  const startPc   = (rootPc + ivsSorted[degIdx]) % 12;
+  const fret0     = mod12(startPc - OPEN_MIDI[0]);
+  const out       = new Set();
+  let pitch = OPEN_MIDI[0] + fret0;
+  for (let mi = 0; mi < 6; mi++) {
+    for (let n = 0; n < 3; n++) {
+      if (!(mi === 0 && n === 0)) pitch = nextScalePitch(pitch, rootPc, ivsSorted);
+      out.add(`${mi}-${pitch - OPEN_MIDI[mi]}`);
+    }
+  }
+  return out;
+}
+
+// 7 позиций, пронумерованных по физическому месту на грифе (позиция 1 — ближе к порожку).
+// Кэш последнего результата — на вкладке «Гаммы» за один рендер get3npsPositions зовут до
+// 4 раз с тем же key/scaleObj (buildFretboard, renderGammaInfo, renderGammaFretboard, оверлей ALL).
+let _3npsCache = null; // { key, scaleObj, result }
+function get3npsPositions(key, scaleObj) {
+  if (_3npsCache && _3npsCache.key === key && _3npsCache.scaleObj === scaleObj) return _3npsCache.result;
+  const result = Array.from({length: 7}, (_, i) => get3npsPosition(key, scaleObj, i))
+    .map(set => ({ set, min: Math.min(...[...set].map(k => +k.split('-')[1])) }))
+    .sort((a, b) => a.min - b.min)
+    .map(o => o.set);
+  _3npsCache = { key, scaleObj, result };
+  return result;
+}
+
+function get3npsAllFrets(key, scaleObj) {
+  const out = new Set();
+  get3npsPositions(key, scaleObj).forEach(posSet => posSet.forEach(v => out.add(v)));
   return out;
 }
 
@@ -1266,7 +1309,7 @@ let cellMap = {};
 let gKey = 'A';
 let gLad = 'aeolian';
 let gBox = 1;
-let gView = 'box'; // 'box' (5 позиций) | 'linear' (3 ноты на струну через весь гриф)
+let gView = 'box'; // 'box' (7 позиций, 3nps) | 'linear' (одна аппликатура от тоники через весь гриф)
 let gCellMap = {};
 
 // ── Сохранение состояния между сессиями ──
@@ -1293,7 +1336,7 @@ function loadState() {
     if (['penta','chords','gamma'].includes(st.activeTab)) activeTab = st.activeTab;
     if (CHROMATIC.includes(st.gKey)) gKey = st.gKey;
     if (typeof st.gLad === 'string' && SCALES[st.gLad]) gLad = st.gLad;
-    if (st.gBox === 'all' || (st.gBox >= 1 && st.gBox <= 5)) gBox = st.gBox;
+    if (st.gBox === 'all' || (st.gBox >= 1 && st.gBox <= 7)) gBox = st.gBox;
     if (['box','linear'].includes(st.gView)) gView = st.gView;
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
@@ -1350,32 +1393,36 @@ function buildKeyGrid(elId, activeKey, suffix, onSelect) {
   });
 }
 
-function buildBoxSel(elId, activeBox, onSelect) {
+// opts: {count, label} — по умолчанию 5 боксов пентатоники; «Гаммы» передают {count:7, label:'Поз'}
+function buildBoxSel(elId, activeBox, onSelect, opts = {}) {
+  const count = opts.count || 5, label = opts.label || 'Бокс';
   const el = document.getElementById(elId);
   el.innerHTML = '';
-  ['all',1,2,3,4,5].forEach(v => {
+  ['all', ...Array.from({length: count}, (_, i) => i + 1)].forEach(v => {
     const b = document.createElement('button');
     const isAll = v === 'all', on = activeBox === v;
     b.className = 'box-btn' + (on ? (isAll ? ' all' : ' on') : '');
-    b.textContent = isAll ? 'ALL' : `Бокс ${v}`;
+    b.textContent = isAll ? 'ALL' : `${label} ${v}`;
     b.onclick = () => onSelect(v);
     el.appendChild(b);
   });
 }
 
-function buildBoxLegend(elId, box) {
+// opts: {colors, label} — по умолчанию палитра/подпись боксов пентатоники
+function buildBoxLegend(elId, box, opts = {}) {
+  const colors = opts.colors || BOX_COLORS, label = opts.label || 'Бокс';
   const leg = document.getElementById(elId);
   if (box === 'all') {
     leg.innerHTML = '';
     leg.className = 'box-legend show';
-    BOX_COLORS.forEach((c, i) => {
+    colors.forEach((c, i) => {
       const item = document.createElement('div');
       item.className = 'bl-item';
       const sq = document.createElement('div');
       sq.className = 'bl-sq';
       sq.style.background = c;
       const lbl = document.createElement('span');
-      lbl.textContent = `Бокс ${i+1}`;
+      lbl.textContent = `${label} ${i+1}`;
       item.appendChild(sq);
       item.appendChild(lbl);
       leg.appendChild(item);
@@ -1498,19 +1545,21 @@ function renderGammaLadSel() {
 }
 
 function renderGammaBoxSel() {
-  buildBoxSel('gBoxSel', gBox, v => { gBox = v; renderGamma(); });
+  buildBoxSel('gBoxSel', gBox, v => { gBox = v; renderGamma(); }, {count: 7, label: 'Поз'});
   document.getElementById('gBoxSection').hidden = gView === 'linear';
 }
 
 function renderGammaInfo() {
   const s = SCALES[gLad];
   buildScaleInfoCard('gInfo', gKey, s, s.base);
-  buildBoxLegend('gBoxLeg', gView === 'linear' ? 'linear' : gBox);
+  buildBoxLegend('gBoxLeg', gView === 'linear' ? 'linear' : gBox, {colors: SCALE_POS_COLORS, label: 'Поз'});
 
-  const active = gView === 'linear' ? getLinearFrets(gKey, s) : getActiveFrets(gKey, gBox, s.base);
+  const active = gView === 'linear' ? getLinearFrets(gKey, s)
+    : gBox === 'all' ? get3npsAllFrets(gKey, s)
+    : get3npsPositions(gKey, s)[gBox - 1];
   const range = activeFretRange(active);
   const rangeTxt = range ? `лады ${range.min}–${range.max}` : '—';
-  const posLabel = gView === 'linear' ? 'Линейно' : (gBox === 'all' ? 'Все боксы' : `Бокс ${gBox}`);
+  const posLabel = gView === 'linear' ? 'Линейно' : (gBox === 'all' ? 'Все позиции' : `Позиция ${gBox}`);
   document.getElementById('gPos').textContent = `${posLabel} · ${rangeTxt}`;
 }
 
@@ -1539,24 +1588,27 @@ function renderGamma() {
 // Строит гриф в элемент fbId для произвольной тональности/лада/бокса — используется
 // и вкладкой «Пентатоника» (renderFretboard), и вкладкой «Гаммы» (renderGammaFretboard).
 // Возвращает cellMap этого грифа (нужен для SVG-рамок боксов в drawBoxOverlay).
-function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_) {
+function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_, isScalePos = false) {
   const fb = document.getElementById(fbId);
   fb.innerHTML = '';
   const cm = {};
 
   const isLinear = box === 'linear';
-  const active = isLinear ? getLinearFrets(key, scaleObj) : getActiveFrets(key, box, mode);
+  const active = isLinear ? getLinearFrets(key, scaleObj)
+    : isScalePos ? (box === 'all' ? get3npsAllFrets(key, scaleObj) : get3npsPositions(key, scaleObj)[box - 1])
+    : getActiveFrets(key, box, mode);
   const sh = semitones(key);
 
   // — Гамма/лад: добавленные ноты поверх пентатоники —
   const rootPc   = CHROMATIC.indexOf(key);
   const scalePcs = scaleObj ? new Set(scaleObj.intervals.map(i => (rootPc + i) % 12)) : null;
   const charPc   = scaleObj ? (rootPc + scaleObj.char) % 12 : -1;
-  // линейная аппликатура: только пентатонические ступени для подсветки 'penta' (остальное — 'ext'/'char')
-  const linearPentaPcs = isLinear ? new Set(pentaIntervals(scaleObj.base).map(i => (rootPc + i) % 12)) : null;
+  // линейная и 3nps-позиционная аппликатуры: только пентатонические ступени для подсветки 'penta'
+  // (остальное — 'ext'/'char'); не завязаны на форму бокса пентатоники, в отличие от AM_BOXES-режима
+  const linearPentaPcs = (isLinear || isScalePos) ? new Set(pentaIntervals(scaleObj.base).map(i => (rootPc + i) % 12)) : null;
   // окно для добавленных нот (лад / блюзовая b5): в режиме бокса — границы бокса, в ALL — весь гриф
   let extMin = 0, extMax = MAX_FRET;
-  if ((scaleObj || blueNoteOn_) && box !== 'all' && !isLinear) {
+  if ((scaleObj || blueNoteOn_) && box !== 'all' && !isLinear && !isScalePos) {
     extMin = Infinity; extMax = -Infinity;
     active.forEach(k => { const f = +k.split('-')[1]; if (f < extMin) extMin = f; if (f > extMax) extMax = f; });
     if (!isFinite(extMin)) { extMin = 0; extMax = MAX_FRET; }
@@ -1618,8 +1670,9 @@ function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_) {
       const pc      = midiVal % 12;
       const inPenta = active.has(`${mi}-${fret}`);
       let kind = null;
-      if (isLinear) {
-        // линейная аппликатура: показываем ровно ноты паттерна, без диапазонного поиска по грифу
+      if (isLinear || isScalePos) {
+        // линейная / 3nps-позиционная аппликатура: показываем ровно ноты паттерна, без
+        // диапазонного поиска по грифу (в отличие от режима боксов пентатоники)
         if (inPenta) kind = (pc === charPc) ? 'char' : (linearPentaPcs.has(pc) ? 'penta' : 'ext');
       } else if (scalePcs) {
         if (inPenta && scalePcs.has(pc)) kind = 'penta';
@@ -1684,15 +1737,17 @@ function renderFretboard() {
 function renderGammaFretboard() {
   const s = SCALES[gLad];
   const boxParam = gView === 'linear' ? 'linear' : gBox;
-  gCellMap = buildFretboard('fbGamma', gKey, s.base, boxParam, s, noteLabels, false);
-  const gActive = gView === 'linear' ? getLinearFrets(gKey, s) : getActiveFrets(gKey, gBox, s.base);
+  gCellMap = buildFretboard('fbGamma', gKey, s.base, boxParam, s, noteLabels, false, gView === 'box');
+  const gActive = gView === 'linear' ? getLinearFrets(gKey, s)
+    : gBox === 'all' ? get3npsAllFrets(gKey, s)
+    : get3npsPositions(gKey, s)[gBox - 1];
   scrollFretboardToRange('fbWrapGamma', 'fbGamma', activeFretRange(gActive));
   // Читаем gKey/gLad/gView/gBox/gCellMap заново при срабатывании таймера (не захватываем в замыкание) —
   // иначе быстрый повторный клик за эти 30мс может нарисовать рамку старого лада (или бокса поверх
   // уже переключённого линейного грифа) поверх нового грифа.
   if (gView === 'box' && gBox === 'all') {
     setTimeout(() => {
-      if (gView === 'box' && gBox === 'all') drawBoxOverlay('fbGamma', gKey, SCALES[gLad].base, gCellMap);
+      if (gView === 'box' && gBox === 'all') drawScalePosOverlay('fbGamma', gKey, SCALES[gLad], gCellMap);
     }, 30);
   }
 }
@@ -1771,6 +1826,71 @@ function drawBoxOverlay(fbId, key, mode, cellMapRef) {
   fb.appendChild(svg);
 }
 
+// Рамки 7 3nps-позиций (SVG) поверх грифа «Гамм» в режиме ALL — отдельно от drawBoxOverlay,
+// т.к. позиции считаются напрямую по формуле лада (get3npsPositions), без сдвига/октав AM_BOXES.
+function drawScalePosOverlay(fbId, key, scaleObj, cellMapRef) {
+  const fb = document.getElementById(fbId);
+
+  const prev = fb.querySelector('.box-svg');
+  if (prev) prev.remove();
+
+  const fbRect = fb.getBoundingClientRect();
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.classList.add('box-svg');
+  svg.setAttribute('width',  fb.offsetWidth);
+  svg.setAttribute('height', fb.offsetHeight);
+
+  const PAD = 4;
+  const positions = get3npsPositions(key, scaleObj);
+
+  positions.forEach((posSet, pi) => {
+    const color = SCALE_POS_COLORS[pi];
+    let x1=Infinity, y1=Infinity, x2=-Infinity, y2=-Infinity;
+
+    posSet.forEach(k => {
+      const [miStr, fretStr] = k.split('-');
+      const mi = +miStr, fret = +fretStr;
+      const cell = cellMapRef[mi] && cellMapRef[mi][fret];
+      if (!cell) return;
+
+      const r = cell.getBoundingClientRect();
+      const lx = r.left - fbRect.left;
+      const ly = r.top  - fbRect.top;
+
+      if (lx - PAD        < x1) x1 = lx - PAD;
+      if (ly - PAD        < y1) y1 = ly - PAD;
+      if (lx + r.width  + PAD > x2) x2 = lx + r.width  + PAD;
+      if (ly + r.height + PAD > y2) y2 = ly + r.height + PAD;
+    });
+
+    if (x1 === Infinity) return;
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x',      x1);
+    rect.setAttribute('y',      y1);
+    rect.setAttribute('width',  x2 - x1);
+    rect.setAttribute('height', y2 - y1);
+    rect.setAttribute('rx',     10);
+    rect.setAttribute('fill',   'none');
+    rect.setAttribute('stroke', color);
+    rect.setAttribute('stroke-width', '2.5');
+    svg.appendChild(rect);
+
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x',           x1 + 5);
+    txt.setAttribute('y',           Math.max(10, y1 - 4));
+    txt.setAttribute('fill',        color);
+    txt.setAttribute('font-size',   '11');
+    txt.setAttribute('font-weight', '700');
+    txt.setAttribute('font-family', 'monospace');
+    txt.textContent = `Поз ${pi+1}`;
+    svg.appendChild(txt);
+  });
+
+  fb.appendChild(svg);
+}
+
 // Пересчёт рамок при ресайзе/повороте экрана: рамки привязаны к пиксельным координатам ячеек
 let boxResizeT = null;
 function scheduleBoxRedraw() {
@@ -1779,7 +1899,7 @@ function scheduleBoxRedraw() {
     const fb = document.getElementById('fb');
     if (selBox === 'all' && fb && fb.offsetWidth > 0) drawBoxOverlay('fb', selKey, selMode, cellMap);
     const fbG = document.getElementById('fbGamma');
-    if (gView === 'box' && gBox === 'all' && fbG && fbG.offsetWidth > 0) drawBoxOverlay('fbGamma', gKey, SCALES[gLad].base, gCellMap);
+    if (gView === 'box' && gBox === 'all' && fbG && fbG.offsetWidth > 0) drawScalePosOverlay('fbGamma', gKey, SCALES[gLad], gCellMap);
   }, 120);
 }
 window.addEventListener('resize', scheduleBoxRedraw);
