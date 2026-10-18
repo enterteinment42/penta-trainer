@@ -85,6 +85,10 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   .blue-btn:hover:not(:disabled) { border-color:#3fa9e8; color:#3fa9e8; }
   .blue-btn.on { background:#3fa9e8; border-color:#3fa9e8; color:#0d0d0f; }
   .blue-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .str-sel { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:-4px 0 14px; }
+  .str-sel .str-t { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); margin-right:2px; }
+  .str-btn { background:var(--panel); border:1px solid #2a2830; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; min-width:34px; padding:6px 8px; cursor:pointer; border-radius:4px; transition:all .15s; }
+  .str-btn.on { background:#3fa9e8; border-color:#3fa9e8; color:#0d0d0f; }
   .nb.blue { background:#3fa9e8; color:#04202e; box-shadow:0 2px 8px rgba(63,169,232,.55); }
 
   /* mode toggle */
@@ -491,6 +495,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
 
   <div class="lbl">2. Выбери бокс</div>
   <div class="box-sel" id="boxSel"></div>
+  <div class="str-sel" id="strSel"></div>
 
   <div class="info">
     <div>Тональность: <span id="iKey">—</span></div>
@@ -1304,6 +1309,7 @@ let noteLabels = 'notes'; // 'notes' | 'intervals'
 let jamPrefs = {};        // "<жанр>|<название>" → { pat, bpm } — настройки джема по прогрессиям
 let activeTab = 'penta';  // 'penta' | 'chords' | 'gamma'
 let cellMap = {};
+let selStrings = [true, true, true, true, true, true]; // по строкам грифа сверху вниз (e B G D A E): показывать ноты на струне
 
 // ── Вкладка «Гаммы» — своё состояние (тональность/лад/бокс) ──
 let gKey = 'A';
@@ -1318,7 +1324,7 @@ function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
-      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView,
+      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView, selStrings,
     }));
   } catch(e) {}
 }
@@ -1338,6 +1344,7 @@ function loadState() {
     if (typeof st.gLad === 'string' && SCALES[st.gLad]) gLad = st.gLad;
     if (st.gBox === 'all' || (st.gBox >= 1 && st.gBox <= 7)) gBox = st.gBox;
     if (['box','linear'].includes(st.gView)) gView = st.gView;
+    if (Array.isArray(st.selStrings) && st.selStrings.length === 6 && st.selStrings.some(Boolean)) selStrings = st.selStrings.map(Boolean);
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
     if (typeof st.countInOn === 'boolean') countInOn = st.countInOn;
@@ -1487,6 +1494,24 @@ function renderBoxSel() {
   buildBoxSel('boxSel', selBox, v => { selBox = v; render(); });
 }
 
+function renderStrSel() {
+  const el = document.getElementById('strSel');
+  el.innerHTML = '<span class="str-t">Струны:</span>';
+  const allOn = selStrings.every(Boolean);
+  const mk = (text, on, fn) => {
+    const b = document.createElement('button');
+    b.className = 'str-btn' + (on ? ' on' : '');
+    b.textContent = text;
+    b.addEventListener('click', () => { fn(); saveState(); render(); });
+    el.appendChild(b);
+  };
+  STR_NAMES.forEach((n, di) => mk(n, selStrings[di], () => {
+    selStrings[di] = !selStrings[di];
+    if (!selStrings.some(Boolean)) selStrings[di] = true; // хотя бы одна струна всегда включена
+  }));
+  mk('Все', allOn, () => { selStrings = selStrings.map(() => true); });
+}
+
 function renderInfo() {
   const ri    = CHROMATIC.indexOf(selKey);
   const notes = pentaIntervals().map(i => CHROMATIC[(ri+i)%12]);
@@ -1588,7 +1613,7 @@ function renderGamma() {
 // Строит гриф в элемент fbId для произвольной тональности/лада/бокса — используется
 // и вкладкой «Пентатоника» (renderFretboard), и вкладкой «Гаммы» (renderGammaFretboard).
 // Возвращает cellMap этого грифа (нужен для SVG-рамок боксов в drawBoxOverlay).
-function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_, isScalePos = false) {
+function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_, isScalePos = false, strMask = null) {
   const fb = document.getElementById(fbId);
   fb.innerHTML = '';
   const cm = {};
@@ -1683,6 +1708,7 @@ function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_, isS
         kind = 'penta';
       }
       if (!kind && pc === bluePc && fret >= extMin && fret <= extMax) kind = 'blue';
+      if (strMask && !strMask[di]) kind = null; // фильтр по струнам (вкладка «Пентатоника»)
       if (kind) {
         const note    = CHROMATIC[pc];
         const isRoot  = pc === rootPc;
@@ -1725,7 +1751,7 @@ function buildFretboard(fbId, key, mode, box, scaleObj, labels, blueNoteOn_, isS
 }
 
 function renderFretboard() {
-  cellMap = buildFretboard('fb', selKey, selMode, selBox, selScale ? SCALES[selScale] : null, noteLabels, blueNoteOn);
+  cellMap = buildFretboard('fb', selKey, selMode, selBox, selScale ? SCALES[selScale] : null, noteLabels, blueNoteOn, false, selStrings);
   scrollFretboardToRange('fbWrapPenta', 'fb', activeFretRange(getActiveFrets(selKey, selBox, selMode)));
   // — SVG box overlays (ALL mode only) —
   if (selBox === 'all') {
@@ -3796,6 +3822,7 @@ function render() {
   saveState();
   renderKeyGrid();
   renderBoxSel();
+  renderStrSel();
   renderInfo();
   renderScaleSel();
   renderScaleInfo();
