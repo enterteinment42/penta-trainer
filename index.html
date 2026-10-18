@@ -473,6 +473,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   <button class="tab-btn" onclick="switchTab('chords')">🎵 Аккорды</button>
   <button class="tab-btn" onclick="switchTab('gamma')">🎶 Гаммы</button>
   <button class="tab-btn" onclick="switchTab('neck')">🧭 Гриф</button>
+  <button class="tab-btn" onclick="switchTab('caged')">🔷 CAGED</button>
 </div>
 <!-- Плавающий бейдж текущего аккорда джем-лупа — закреплён сверху и виден всё время игры лупа,
      не только когда проскроллено к карточке (так подсветку тонов видно, даже когда гриф вне
@@ -607,6 +608,36 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   <div class="hint">💡 <b>Зажимай</b> ноты — звучат. В режиме «Скрыть» ставь палец на лад, называй ноту вслух, потом тапни — покажется название.</div>
 </div>
 </div><!-- end #tab-neck -->
+
+<div class="tab-page" id="tab-caged">
+<div class="main">
+  <div class="lbl">Мажорное трезвучие — выбери тональность</div>
+  <div class="key-grid" id="cKeyGrid"></div>
+
+  <div class="lbl">Выбери форму</div>
+  <div class="box-sel" id="cShapeSel"></div>
+
+  <div class="nl-row">
+    <div class="mode-toggle">
+      <button class="mode-btn" onclick="playCaged('strum')">▶ АККОРД</button>
+      <button class="mode-btn" onclick="playCaged('arp')">▶ АРПЕДЖИО</button>
+    </div>
+  </div>
+
+  <div class="info">
+    <div>Трезвучие: <span id="cTriad">—</span></div>
+    <div>Форма: <span id="cInfo">—</span></div>
+  </div>
+
+  <div class="fb-wrap" id="fbWrapCaged">
+    <div class="fretboard" id="fbCaged"></div>
+    <div class="fb-fade fb-fade-l"></div>
+    <div class="fb-fade fb-fade-r"></div>
+  </div>
+  <div class="box-legend" id="cLeg"></div>
+  <div class="hint">💡 Формы идут по грифу в порядке C–A–G–E–D и повторяются через октаву. Красная нота — корень. <b>G-форма упрощена</b>: без верхней ноты мизинцем. Тапни по ноте — услышишь её.</div>
+</div>
+</div><!-- end #tab-caged -->
 
 <div class="tab-page" id="tab-gamma">
 <div class="main">
@@ -1351,13 +1382,17 @@ let nNote = 'F';
 let nHide = false; // true: названия нот скрыты, проявляются по тапу (самопроверка)
 let nStrings = [true, true, true, true, true, true];
 
+// ── Вкладка «CAGED» — 5 форм мажорного трезвучия ──
+let cKey = 'C';
+let cShape = 'C'; // 'C' | 'A' | 'G' | 'E' | 'D' | 'all'
+
 // ── Сохранение состояния между сессиями ──
 const LS_KEY = 'penta-trainer-state';
 function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
-      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView, selStrings, nNote, nHide, nStrings,
+      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView, selStrings, nNote, nHide, nStrings, cKey, cShape,
     }));
   } catch(e) {}
 }
@@ -1372,7 +1407,7 @@ function loadState() {
     if (['acoustic','distortion'].includes(st.timbre)) { timbre = st.timbre; setTimbre(st.timbre); }
     if (['notes','intervals'].includes(st.noteLabels)) noteLabels = st.noteLabels;
     if (st.jamPrefs && typeof st.jamPrefs === 'object') jamPrefs = st.jamPrefs;
-    if (['penta','chords','gamma','neck'].includes(st.activeTab)) activeTab = st.activeTab;
+    if (['penta','chords','gamma','neck','caged'].includes(st.activeTab)) activeTab = st.activeTab;
     if (CHROMATIC.includes(st.gKey)) gKey = st.gKey;
     if (typeof st.gLad === 'string' && SCALES[st.gLad]) gLad = st.gLad;
     if (st.gBox === 'all' || (st.gBox >= 1 && st.gBox <= 7)) gBox = st.gBox;
@@ -1380,6 +1415,8 @@ function loadState() {
     if (Array.isArray(st.selStrings) && st.selStrings.length === 6 && st.selStrings.some(Boolean)) selStrings = st.selStrings.map(Boolean);
     if (CHROMATIC.includes(st.nNote)) nNote = st.nNote;
     if (typeof st.nHide === 'boolean') nHide = st.nHide;
+    if (CHROMATIC.includes(st.cKey)) cKey = st.cKey;
+    if (['C','A','G','E','D','all'].includes(st.cShape)) cShape = st.cShape;
     if (Array.isArray(st.nStrings) && st.nStrings.length === 6 && st.nStrings.some(Boolean)) nStrings = st.nStrings.map(Boolean);
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
@@ -3429,6 +3466,137 @@ function switchTab(tab) {
   if (tab === 'chords') renderChordExplorer();
   if (tab === 'gamma')  renderGamma();
   if (tab === 'neck')   renderNeck();
+  if (tab === 'caged')  renderCaged();
+}
+
+// ═══ ВКЛАДКА «CAGED» ══════════════════════════════
+// Открытые мажорные формы: лады по струнам от низкой E к высокой e (-1 — не играется), корень формы.
+// G — упрощённая (без верхней ноты мизинцем, по совету преподавателя).
+const CAGED_SHAPES = {
+  C: { root: 0, frets: [-1, 3, 2, 0, 1, 0] },
+  A: { root: 9, frets: [-1, 0, 2, 2, 2, 0] },
+  G: { root: 7, frets: [3, 2, 0, 0, 0, -1] },
+  E: { root: 4, frets: [0, 2, 2, 1, 0, 0] },
+  D: { root: 2, frets: [-1, -1, 0, 2, 3, 2] },
+};
+const CAGED_ORDER  = ['C', 'A', 'G', 'E', 'D'];
+const CAGED_COLORS = { C: BOX_COLORS[0], A: BOX_COLORS[1], G: BOX_COLORS[2], E: BOX_COLORS[3], D: BOX_COLORS[4] };
+
+// Все положения форм на грифе 0..MAX_FRET для тональности key: сдвиг открытой формы на нужное число ладов
+function cagedPositions(key) {
+  const k = CHROMATIC.indexOf(key), out = [];
+  CAGED_ORDER.forEach(name => {
+    const sh = CAGED_SHAPES[name];
+    const s0 = (k - sh.root + 12) % 12;
+    [s0, s0 + 12].forEach(s => {
+      const frets = sh.frets.map(f => f < 0 ? -1 : f + s);
+      if (Math.max(...frets) <= MAX_FRET) {
+        const played = frets.filter(f => f >= 0);
+        out.push({ shape: name, frets, min: Math.min(...played), max: Math.max(...played) });
+      }
+    });
+  });
+  return out.sort((a, b) => a.min - b.min || a.max - b.max);
+}
+
+function playCaged(mode) {
+  const list = cagedPositions(cKey).filter(p => cShape === 'all' || p.shape === cShape);
+  if (!list.length) return;
+  const midis = [];
+  list[0].frets.forEach((f, mi) => { if (f >= 0) midis.push(OPEN_MIDI[mi] + f); });
+  const ctx = getCtx(), t0 = ctx.currentTime;
+  const step = mode === 'arp' ? 0.38 : 0.028;
+  const stops = midis.map((m, i) => makeVoice(m, false, { when: t0 + i * step }));
+  setTimeout(() => stops.forEach(s => s()), (2.0 + midis.length * step + 0.4) * 1000);
+}
+
+function renderCaged() {
+  buildKeyGrid('cKeyGrid', cKey, '', n => { cKey = n; saveState(); renderCaged(); });
+  const sel = document.getElementById('cShapeSel');
+  sel.innerHTML = '';
+  [...CAGED_ORDER, 'all'].forEach(v => {
+    const b = document.createElement('button');
+    b.className = 'box-btn' + (cShape === v ? ' on' : '');
+    b.textContent = v === 'all' ? 'ALL' : v;
+    if (v !== 'all') b.style.borderColor = CAGED_COLORS[v];
+    b.onclick = () => { cShape = v; saveState(); renderCaged(); };
+    sel.appendChild(b);
+  });
+
+  const k = CHROMATIC.indexOf(cKey);
+  const triad = [0, 4, 7].map(i => CHROMATIC[(k + i) % 12]);
+  document.getElementById('cTriad').textContent = triad.join(' – ');
+  const list = cagedPositions(cKey).filter(p => cShape === 'all' || p.shape === cShape);
+  document.getElementById('cInfo').textContent = cShape === 'all'
+    ? 'все 5 форм'
+    : list.map(p => `${p.frets.map(f => f < 0 ? 'x' : f).join(' ')} (лады ${p.min}–${p.max})`).join('  ·  ');
+  document.getElementById('cLeg').innerHTML = cShape === 'all'
+    ? CAGED_ORDER.map(n => `<span style="color:${CAGED_COLORS[n]}">● ${n}</span>`).join(' &nbsp; ') : '';
+
+  // карта «струна-лад» → форма
+  const mark = {};
+  list.forEach(p => p.frets.forEach((f, mi) => { if (f >= 0) mark[`${mi}-${f}`] = p.shape; }));
+
+  const fb = document.getElementById('fbCaged');
+  fb.innerHTML = '';
+  const fh = document.createElement('div');
+  fh.className = 'fh';
+  const nutSp = document.createElement('div');
+  nutSp.className = 'fh-nut';
+  fh.appendChild(nutSp);
+  SHOW_FRETS.forEach(f => {
+    const c = document.createElement('div');
+    c.className = 'fh-c';
+    c.textContent = f === 0 ? '' : f;
+    fh.appendChild(c);
+  });
+  fb.appendChild(fh);
+
+  STR_NAMES.forEach((name, di) => {
+    const mi = STR_MIDIS[di];
+    const row = document.createElement('div');
+    row.className = `sr s${di}`;
+    const lbl = document.createElement('div');
+    lbl.className = 'slbl';
+    lbl.textContent = name;
+    row.appendChild(lbl);
+    const nut = document.createElement('div');
+    nut.className = 'snut';
+    row.appendChild(nut);
+    SHOW_FRETS.forEach(fret => {
+      const cell = document.createElement('div');
+      cell.className = 'sc';
+      if (fret > 0 && MARKERS.has(fret) && di === 5) {
+        const dot = document.createElement('div');
+        dot.className = 'fmark' + (fret === 12 ? ' gold' : '');
+        cell.appendChild(dot);
+      }
+      const shp = mark[`${mi}-${fret}`];
+      if (shp) {
+        const midiVal = OPEN_MIDI[mi] + fret;
+        const pc = midiVal % 12;
+        const btn = document.createElement('button');
+        btn.className = 'nb ' + (pc === k ? 'root' : 'reg');
+        btn.textContent = CHROMATIC[pc];
+        btn.dataset.pc = pc;
+        if (cShape === 'all') btn.style.boxShadow = `0 0 0 2px ${CAGED_COLORS[shp]}`;
+        let stopFn = null;
+        const press = e => { e.preventDefault(); if (stopFn) stopFn(); stopFn = startNote(midiVal); btn.classList.add('held'); };
+        const release = e => { e.preventDefault(); btn.classList.remove('held'); if (stopFn) { stopFn(); stopFn = null; } };
+        btn.addEventListener('touchstart',  press,   {passive:false});
+        btn.addEventListener('touchend',    release, {passive:false});
+        btn.addEventListener('touchcancel', release, {passive:false});
+        btn.addEventListener('mousedown',   press);
+        btn.addEventListener('mouseup',     release);
+        btn.addEventListener('mouseleave',  release);
+        cell.appendChild(btn);
+      }
+      row.appendChild(cell);
+    });
+    fb.appendChild(row);
+  });
+  const frs = list.flatMap(p => [p.min, p.max]);
+  if (frs.length) scrollFretboardToRange('fbWrapCaged', 'fbCaged', { min: Math.min(...frs), max: Math.max(...frs) });
 }
 
 // ═══ ВКЛАДКА «ГРИФ» ═══════════════════════════════
@@ -3963,6 +4131,7 @@ syncNoteLabelButtons();
 if (activeTab === 'chords') switchTab('chords');
 if (activeTab === 'gamma')  switchTab('gamma');
 if (activeTab === 'neck')   switchTab('neck');
+if (activeTab === 'caged')  switchTab('caged');
 const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol;
 
 ['fbWrapPenta', 'fbWrapGamma'].forEach(id => {
