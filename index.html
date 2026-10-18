@@ -472,6 +472,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
   <button class="tab-btn active" onclick="switchTab('penta')">🎸 Пентатоника</button>
   <button class="tab-btn" onclick="switchTab('chords')">🎵 Аккорды</button>
   <button class="tab-btn" onclick="switchTab('gamma')">🎶 Гаммы</button>
+  <button class="tab-btn" onclick="switchTab('neck')">🧭 Гриф</button>
 </div>
 <!-- Плавающий бейдж текущего аккорда джем-лупа — закреплён сверху и виден всё время игры лупа,
      не только когда проскроллено к карточке (так подсветку тонов видно, даже когда гриф вне
@@ -580,6 +581,33 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
 </div><!-- end #tab-chords -->
 
 <!-- TAB: GAMMAS -->
+<div class="tab-page" id="tab-neck">
+<div class="main">
+  <div class="lbl">Найди все ноты</div>
+  <div class="key-grid" id="nKeyGrid"></div>
+
+  <div class="str-sel" id="nStrSel"></div>
+
+  <div class="nl-row">
+    <div class="mode-toggle">
+      <button class="mode-btn active-timbre" id="btnNShow" onclick="setNeckHide(false)">ПОКАЗАТЬ</button>
+      <button class="mode-btn"               id="btnNHide" onclick="setNeckHide(true)">СКРЫТЬ</button>
+    </div>
+  </div>
+
+  <div class="info">
+    <div>Нота <span id="nName">—</span> · найдено: <span id="nCount">0</span></div>
+  </div>
+
+  <div class="fb-wrap" id="fbWrapNeck">
+    <div class="fretboard" id="fbNeck"></div>
+    <div class="fb-fade fb-fade-l"></div>
+    <div class="fb-fade fb-fade-r"></div>
+  </div>
+  <div class="hint">💡 <b>Зажимай</b> ноты — звучат. В режиме «Скрыть» ставь палец на лад, называй ноту вслух, потом тапни — покажется название.</div>
+</div>
+</div><!-- end #tab-neck -->
+
 <div class="tab-page" id="tab-gamma">
 <div class="main">
   <div class="lbl">Выбери тональность</div>
@@ -1318,13 +1346,18 @@ let gBox = 1;
 let gView = 'box'; // 'box' (7 позиций, 3nps) | 'linear' (одна аппликатура от тоники через весь гриф)
 let gCellMap = {};
 
+// ── Вкладка «Гриф» — найти все места одной ноты ──
+let nNote = 'F';
+let nHide = false; // true: названия нот скрыты, проявляются по тапу (самопроверка)
+let nStrings = [true, true, true, true, true, true];
+
 // ── Сохранение состояния между сессиями ──
 const LS_KEY = 'penta-trainer-state';
 function saveState() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       selKey, selBox, selMode, selScale, selGenre, timbre, noteLabels, jamPrefs, activeTab, metroOn, masterVol,
-      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView, selStrings,
+      rhythmOnlyOn, countInOn, blueNoteOn, bandOn, jamOn, gKey, gLad, gBox, gView, selStrings, nNote, nHide, nStrings,
     }));
   } catch(e) {}
 }
@@ -1339,12 +1372,15 @@ function loadState() {
     if (['acoustic','distortion'].includes(st.timbre)) { timbre = st.timbre; setTimbre(st.timbre); }
     if (['notes','intervals'].includes(st.noteLabels)) noteLabels = st.noteLabels;
     if (st.jamPrefs && typeof st.jamPrefs === 'object') jamPrefs = st.jamPrefs;
-    if (['penta','chords','gamma'].includes(st.activeTab)) activeTab = st.activeTab;
+    if (['penta','chords','gamma','neck'].includes(st.activeTab)) activeTab = st.activeTab;
     if (CHROMATIC.includes(st.gKey)) gKey = st.gKey;
     if (typeof st.gLad === 'string' && SCALES[st.gLad]) gLad = st.gLad;
     if (st.gBox === 'all' || (st.gBox >= 1 && st.gBox <= 7)) gBox = st.gBox;
     if (['box','linear'].includes(st.gView)) gView = st.gView;
     if (Array.isArray(st.selStrings) && st.selStrings.length === 6 && st.selStrings.some(Boolean)) selStrings = st.selStrings.map(Boolean);
+    if (CHROMATIC.includes(st.nNote)) nNote = st.nNote;
+    if (typeof st.nHide === 'boolean') nHide = st.nHide;
+    if (Array.isArray(st.nStrings) && st.nStrings.length === 6 && st.nStrings.some(Boolean)) nStrings = st.nStrings.map(Boolean);
     if (typeof st.metroOn === 'boolean') metroOn = st.metroOn;
     if (typeof st.rhythmOnlyOn === 'boolean') rhythmOnlyOn = st.rhythmOnlyOn;
     if (typeof st.countInOn === 'boolean') countInOn = st.countInOn;
@@ -1494,23 +1530,24 @@ function renderBoxSel() {
   buildBoxSel('boxSel', selBox, v => { selBox = v; render(); });
 }
 
-function renderStrSel() {
-  const el = document.getElementById('strSel');
+// Ряд кнопок-струн; mask — массив из 6 флагов, меняется на месте; after — перерисовка после клика
+function buildStrSel(elId, mask, after) {
+  const el = document.getElementById(elId);
   el.innerHTML = '<span class="str-t">Струны:</span>';
-  const allOn = selStrings.every(Boolean);
   const mk = (text, on, fn) => {
     const b = document.createElement('button');
     b.className = 'str-btn' + (on ? ' on' : '');
     b.textContent = text;
-    b.addEventListener('click', () => { fn(); saveState(); render(); });
+    b.addEventListener('click', () => { fn(); saveState(); after(); });
     el.appendChild(b);
   };
-  STR_NAMES.forEach((n, di) => mk(n, selStrings[di], () => {
-    selStrings[di] = !selStrings[di];
-    if (!selStrings.some(Boolean)) selStrings[di] = true; // хотя бы одна струна всегда включена
+  STR_NAMES.forEach((n, di) => mk(n, mask[di], () => {
+    mask[di] = !mask[di];
+    if (!mask.some(Boolean)) mask[di] = true; // хотя бы одна струна всегда включена
   }));
-  mk('Все', allOn, () => { selStrings = selStrings.map(() => true); });
+  mk('Все', mask.every(Boolean), () => mask.fill(true));
 }
+function renderStrSel() { buildStrSel('strSel', selStrings, render); }
 
 function renderInfo() {
   const ri    = CHROMATIC.indexOf(selKey);
@@ -3391,6 +3428,89 @@ function switchTab(tab) {
   });
   if (tab === 'chords') renderChordExplorer();
   if (tab === 'gamma')  renderGamma();
+  if (tab === 'neck')   renderNeck();
+}
+
+// ═══ ВКЛАДКА «ГРИФ» ═══════════════════════════════
+function setNeckHide(v) { nHide = v; saveState(); renderNeck(); }
+
+function renderNeck() {
+  buildKeyGrid('nKeyGrid', nNote, '', n => { nNote = n; saveState(); renderNeck(); });
+  buildStrSel('nStrSel', nStrings, renderNeck);
+  document.getElementById('btnNShow').className = 'mode-btn' + (!nHide ? ' active-timbre' : '');
+  document.getElementById('btnNHide').className = 'mode-btn' + (nHide ? ' active-timbre' : '');
+
+  const fb = document.getElementById('fbNeck');
+  fb.innerHTML = '';
+  const pcTarget = CHROMATIC.indexOf(nNote);
+
+  const fh = document.createElement('div');
+  fh.className = 'fh';
+  const nutSp = document.createElement('div');
+  nutSp.className = 'fh-nut';
+  fh.appendChild(nutSp);
+  SHOW_FRETS.forEach(f => {
+    const c = document.createElement('div');
+    c.className = 'fh-c';
+    c.textContent = f === 0 ? '' : f;
+    fh.appendChild(c);
+  });
+  fb.appendChild(fh);
+
+  let count = 0;
+  STR_NAMES.forEach((name, di) => {
+    const mi = STR_MIDIS[di];
+    const row = document.createElement('div');
+    row.className = `sr s${di}`;
+    const lbl = document.createElement('div');
+    lbl.className = 'slbl';
+    lbl.textContent = name;
+    row.appendChild(lbl);
+    const nut = document.createElement('div');
+    nut.className = 'snut';
+    row.appendChild(nut);
+
+    SHOW_FRETS.forEach(fret => {
+      const cell = document.createElement('div');
+      cell.className = 'sc';
+      if (fret > 0 && MARKERS.has(fret) && di === 5) {
+        const dot = document.createElement('div');
+        dot.className = 'fmark' + (fret === 12 ? ' gold' : '');
+        cell.appendChild(dot);
+      }
+      const midiVal = OPEN_MIDI[mi] + fret;
+      if (nStrings[di] && midiVal % 12 === pcTarget) {
+        count++;
+        const btn = document.createElement('button');
+        btn.className = 'nb root';
+        btn.textContent = nHide ? '?' : nNote;
+        let stopFn = null;
+        const press = e => {
+          e.preventDefault();
+          btn.textContent = nNote; // в режиме «Скрыть» тап проявляет название
+          if (stopFn) stopFn();
+          stopFn = startNote(midiVal);
+          btn.classList.add('held');
+        };
+        const release = e => {
+          e.preventDefault();
+          btn.classList.remove('held');
+          if (stopFn) { stopFn(); stopFn = null; }
+        };
+        btn.addEventListener('touchstart',  press,   {passive:false});
+        btn.addEventListener('touchend',    release, {passive:false});
+        btn.addEventListener('touchcancel', release, {passive:false});
+        btn.addEventListener('mousedown',   press);
+        btn.addEventListener('mouseup',     release);
+        btn.addEventListener('mouseleave',  release);
+        cell.appendChild(btn);
+      }
+      row.appendChild(cell);
+    });
+    fb.appendChild(row);
+  });
+  document.getElementById('nName').textContent = nNote;
+  document.getElementById('nCount').textContent = count;
 }
 
 function scrollToProgressions() {
@@ -3842,6 +3962,7 @@ btLoadSaved();
 syncNoteLabelButtons();
 if (activeTab === 'chords') switchTab('chords');
 if (activeTab === 'gamma')  switchTab('gamma');
+if (activeTab === 'neck')   switchTab('neck');
 const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol;
 
 ['fbWrapPenta', 'fbWrapGamma'].forEach(id => {
