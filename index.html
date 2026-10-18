@@ -623,6 +623,7 @@ document.write('<link rel="manifest" href="' + manifestURL + '">');
       <button class="mode-btn" onclick="playCaged('arp')">▶ АРПЕДЖИО</button>
     </div>
   </div>
+  <div class="hint" id="cPlayInfo"></div>
 
   <div class="info">
     <div>Трезвучие: <span id="cTriad">—</span></div>
@@ -3502,6 +3503,7 @@ function cagedPositions(key) {
 function playCaged(mode) {
   const list = cagedPositions(cKey).filter(p => cShape === 'all' || p.shape === cShape);
   if (!list.length) return;
+  stopAllNotes(); // повторный тап не наслаивается на прошлый аккорд/арпеджио
   const midis = [];
   list[0].frets.forEach((f, mi) => { if (f >= 0) midis.push(OPEN_MIDI[mi] + f); });
   const ctx = getCtx(), t0 = ctx.currentTime;
@@ -3530,12 +3532,14 @@ function renderCaged() {
   document.getElementById('cInfo').textContent = cShape === 'all'
     ? 'все 5 форм'
     : list.map(p => `${p.frets.map(f => f < 0 ? 'x' : f).join(' ')} (лады ${p.min}–${p.max})`).join('  ·  ');
+  document.getElementById('cPlayInfo').textContent = list.length
+    ? `▶ играет: ${list[0].shape}-форма, лады ${list[0].min}–${list[0].max}` : '';
   document.getElementById('cLeg').innerHTML = cShape === 'all'
     ? CAGED_ORDER.map(n => `<span style="color:${CAGED_COLORS[n]}">● ${n}</span>`).join(' &nbsp; ') : '';
 
   // карта «струна-лад» → форма
   const mark = {};
-  list.forEach(p => p.frets.forEach((f, mi) => { if (f >= 0) mark[`${mi}-${f}`] = p.shape; }));
+  list.forEach(p => p.frets.forEach((f, mi) => { if (f >= 0) (mark[`${mi}-${f}`] = mark[`${mi}-${f}`] || []).push(p.shape); }));
 
   const fb = document.getElementById('fbCaged');
   fb.innerHTML = '';
@@ -3579,7 +3583,8 @@ function renderCaged() {
         btn.className = 'nb ' + (pc === k ? 'root' : 'reg');
         btn.textContent = CHROMATIC[pc];
         btn.dataset.pc = pc;
-        if (cShape === 'all') btn.style.boxShadow = `0 0 0 2px ${CAGED_COLORS[shp]}`;
+        // общая нота соседних форм — кольцо на каждую форму, одно в другом
+        if (cShape === 'all') btn.style.boxShadow = shp.map((s, i) => `0 0 0 ${2 * (i + 1)}px ${CAGED_COLORS[s]}`).join(', ');
         let stopFn = null;
         const press = e => { e.preventDefault(); if (stopFn) stopFn(); stopFn = startNote(midiVal); btn.classList.add('held'); };
         const release = e => { e.preventDefault(); btn.classList.remove('held'); if (stopFn) { stopFn(); stopFn = null; } };
@@ -4134,7 +4139,7 @@ if (activeTab === 'neck')   switchTab('neck');
 if (activeTab === 'caged')  switchTab('caged');
 const _vs = document.getElementById('volSlider'); if (_vs) _vs.value = masterVol;
 
-['fbWrapPenta', 'fbWrapGamma'].forEach(id => {
+['fbWrapPenta', 'fbWrapGamma', 'fbWrapNeck', 'fbWrapCaged'].forEach(id => {
   const el = document.getElementById(id);
   if (el) el.addEventListener('scroll', () => updateFbFade(id), { passive: true });
 });
